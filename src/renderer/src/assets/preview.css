@@ -1,0 +1,120 @@
+/* src/renderer/src/assets/preview.css - 最終版 */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-image: url(../../../../resources/background/BG01.png); 
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+#content, #background-layer, #ui-layer {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+}
+#background-layer { z-index: 2; }
+#ui-layer { z-index: 3;  }
+#background-layer, #ui-layer {
+  pointer-events: none;
+}
+#ui-layer button {
+  pointer-events: auto;
+}
+
+#title-bar {
+  position: fixed; /* 常に画面上部に固定 */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 36px; /* ドラッグ領域の高さ */
+  -webkit-app-region: drag; /* ★ このバー全体をドラッグ可能に */
+  z-index: 1000;
+  
+  /* ボタンを右に寄せるためのFlexbox設定 */
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+#content {
+  position: relative;
+  writing-mode: vertical-rl; 
+  width: 100%;
+  height: 100%;
+  max-height: 40em;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: pre-wrap; 
+  padding:36px;
+  box-sizing: border-box; /* paddingを含めてサイズを計算 */
+  z-index: 1;
+  font-size: 18px;
+  line-height: 2.0;
+  background-color: transparent;
+  color: #333;
+  caret-color: #333; 
+  /* contenteditableのデフォルトの枠線を消す */
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* ダークモード用のスタイル */
+body.dark-mode  {
+  background-image:none;
+  background-color: rgba(30, 30, 30, 0.8);
+}
+body.dark-mode #content {
+  color: #ccc;
+}
+
+
+#preview-controls {
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+}
+
+#preview-controls button {
+  background: rgba(0,0,0,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  border-radius: 30%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  -webkit-app-region: no-drag; /* ボタン自体はドラッグ不可に */
+}
+#snow-toggle-btn{
+ text-align: center;
+  justify-content: center;
+  align-items: center;
+  padding-left: 4px;
+}
+
+body.dark-mode #preview-controls button {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(0,0,0,0.2);
+  color: black;
+}
+
+#content::-webkit-scrollbar {
+  height: 16px; /* 縦書きなので height */
+}
+#content::-webkit-scrollbar-track {
+  background: transparent; /* ★ トラック（背景）を透明に */
+}
+#content::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  min-width: 40px;
+}
+body.dark-mode #content::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.1);
+}

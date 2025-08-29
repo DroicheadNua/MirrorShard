@@ -1,0 +1,45 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: auto;
+  background-color: #0A0A0A; /* 黒 */
+  color: #00FF41; /* 明るい緑 */
+  font-family:  Consolas, 'Courier New', メイリオ, sans-serif, monospace; 
+  font-size: 15px;
+}
+
+.content {
+  padding: 2em;
+}
+
+h1, h2 {
+  border-bottom: 1px solid #00FF41;
+
+}
+
+dl {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 0em 1em; /* ★ 行間（縦のgap）を詰める */
+}
+
+/* ★ スクロールバーをグリーンディスプレイ風に */
+body::-webkit-scrollbar {
+  width: 12px;
+}
+body::-webkit-scrollbar-track {
+  background: #0A0A0A; /* 背景を黒に */
+}
+body::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 255, 65, 0.3); /* 緑色の半透明バー */
+  border-radius: 4px;
+}
+body::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 255, 65, 0.8);
+}
+
+.mac-only {
+  display: none;
+}

@@ -1,0 +1,70 @@
+<!-- src/renderer/index.html - クリーンアップ版 -->
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self'; media-src 'self' safe-resource: data:;">
+  <title>MirrorShard</title>
+  <!-- ★ 外部CSSを読み込むだけのシンプルな形に戻す -->
+  <link rel="stylesheet" href="./src/assets/main.css">
+</head>
+<body>
+
+  <!-- アプリケーション全体を包むコンテナ -->
+  <div id="app-container">
+    
+    <!-- 上部のタイトルバー（ドラッグ領域） -->
+    <div id="title-bar">  
+      <button id="zen-mode-btn" title="ZENモード (Cmd/Ctrl+Shift+C)">Z</button> 
+        <div class="font-controls zen-hide">
+          <button id="new-file-btn" title="新規ファイル(Ctrl+N)">📄</button>
+          <button id="open-file-btn" title="ファイルを開く (Ctrl+O)">📂</button>
+          <button id="decrease-font-btn" title="文字を小さく(Ctrl+-)">-</button>
+          <button id="reset-font-btn" title="リセット(Ctrl+0)">○</button>
+          <button id="increase-font-btn" title="文字を大きく(Ctrl++)">+</button>
+          <button id="cycle-font-btn" title="フォント切替(Ctrl+Shift+F)">F</button>
+          <button id="bgm-cycle-btn" title="次の曲へ (Cmd/Ctrl+Shift+M)">🎵</button>
+          <button id="bgm-play-pause-btn" title="再生/停止 (Cmd/Ctrl+Shift+P)">▶</button>
+          <button id="typesound-toggle-btn" title="タイプ音 ON/OFF (Cmd/Ctrl+Shift+T)">🎤</button>
+        </div>       
+        <div class="window-controls zen-hide">
+          <button id="open-resources-btn" title="素材フォルダを開く(Ctrl+Shift+J)">R</button>
+          <button id="focus-mode-btn" title="半透明ウィンドウ(Cmd/Ctrl+Shift+W)">📷️</button>
+          <button id="preview-btn" title="縦書きプレビュー (Ctrl+P)">📖</button>
+          <button id="dark-mode-btn" title="ダークモード切替 (Ctrl+T)">🌙</button>
+          <button id="bg-cycle-btn" title="背景切替 (Cmd/Ctrl+Shift+B)">🖼️</button>
+          <button id="minimize-btn" title="最小化 (Ctrl+H)">－</button>
+          <button id="fullscreen-btn" title="フルスクリーン(F11)">⤢</button>
+          <button id="close-btn" title="終了(Ctrl+Q)">×</button>
+        </div>        
+    </div>
+
+    <!-- メインコンテンツ領域（タイトルバーの下） -->
+    <div id="main-content">
+
+      <div id="status-bar" class="zen-hide">
+        <span id="status-stats">1L 1C</span>
+        <span id="status-encoding">UTF-8</span>
+        <span id="status-eol">LF</span>
+        <span id="status-time">22:41</span>
+      </div>
+      
+      <!-- 左側のアウトラインパネル -->
+      <div id="outline-panel">
+        <div class="outline-controls">
+            
+          <button id="collapse-all-btn" title="すべて折りたたむ">↑</button>
+          <button id="expand-all-btn" title="すべて展開">↓</button>
+        </div>
+        <div id="outline-container"></div>
+      </div>
+      
+
+      <!-- 右側のエディタコンテナ -->
+      <div id="container"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/renderer.ts"></script>
+</body>
+</html>

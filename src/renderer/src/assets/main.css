@@ -1,0 +1,425 @@
+@font-face {
+  font-family: 'PlemolJPHS Custom'; 
+  src: url('safe-resource://fonts/PlemolJPHS-Regular.ttf');
+}
+
+:root {
+  /* ライトモードのデフォルト値 */
+  --outline-bg-color: transparent;
+  --outline-text-color: rgba(0.2, 0.2, 0.2, 0.6);
+  --outline-border-color: rgba(0.1, 0.1, 0.1, 0.25);
+  --outline-button-text-color: white;
+  --outline-hover-bg: rgba(0, 0, 0, 0.2);
+  --editor-bg-image: none; /* 背景画像を指定 */
+  --editor-gradient: transparent;
+  --editor-text-color: #333333;
+  --editor-caret-color:#333333;
+  --app-bg-color: transparent; 
+  --scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
+  --scrollbar-thumb-hover-color: rgba(0, 0, 0, 0.35);
+  --btn-bg-color: rgba(0, 0, 0, 0.1);
+  --btn-border-color: rgba(255,255,255,0.2);
+  --file-text-color: #333333;
+  --active-bg-color: rgba(0, 0, 0, 0.1);
+  --editor-caret-color: #333333;
+}
+
+/* ★ bodyに 'dark-mode' クラスが付いたときのスタイル */
+body.dark-mode {
+  --outline-bg-color: #444;
+  --outline-text-color: #CCCCCC;
+  --outline-border-color: #555555; /* ボタンの枠線用に少し明るい色 */
+  --outline-button-text-color: #AAAAAA; /* ボタンの文字色用 */
+  --outline-hover-bg: rgba(200, 200, 200, 0.2);
+  --editor-bg-image: none; /* ★ 背景画像をなくす */
+  --editor-gradient: #444444;
+  --editor-text-color: #DDDDDD;
+  --app-bg-color: #444;
+  --scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+  --scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.35);
+  --btn-bg-color: rgba(100,100,100, 0.3);
+  --btn-border-color: rgba(0,0,0,0.2);
+  --file-text-color: #CCCCCC;
+  --active-bg-color: rgba(255, 255, 255, 0.1);
+  --editor-caret-color: #DDDDDD;
+}
+
+
+
+/* --- 1. グローバル & アプリコンテナ --- */
+html, body {
+  margin: 0; padding: 0; width: 100%; height: 100%;
+  overflow: hidden; 
+  background-image: none;
+  background-color: var(--app-bg-color); 
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: background-color 0.5s ease, background-image 0.5s ease-in-out;
+}
+/* ★ 初期化完了後に適用されるスタイル */
+body.initialized {
+  /* ここで初めて、CSS変数を使って背景画像を設定 */
+  background-image: var(--app-bg-image);
+}
+
+/* 1. アプリ全体 (縦方向Flexbox) */
+#app-container {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--app-bg-color);
+}
+
+/* --- 2. タイトルバー & コントロールボタン --- */
+#title-bar {
+  height: 36px;
+  flex-shrink: 0;
+  -webkit-app-region: drag; 
+  display: flex; 
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+  background-color: transparent;
+}
+.font-controls, .window-controls {
+  -webkit-app-region: no-drag; 
+  display: flex;
+  align-items: center;
+}
+.font-controls button, .window-controls button ,#collapse-all-btn, #expand-all-btn, #bgm-cycle-btn, #bgm-play-pause-btn, #zen-mode-btn{
+  width: 24px;
+  height: 24px;
+  border: none;
+  font-size: 12px;
+  line-height: 24px;
+  text-align: center;
+  background-color: var(--btn-bg-color);
+  cursor: pointer;
+  padding: 0px;
+  color: var(--outline-button-text-color);
+  border-radius: 20%; 
+  margin: 2px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 10px;
+  border: 1px solid var(--btn-border-color);
+}
+.font-controls button:hover, .window-controls button:hover, #collapse-all-btn:hover, #expand-all-btn:hover, #bgm-cycle-btn:hover, #bgm-play-pause-btn:hover, #zen-mode-btn:hover{ 
+  background-color: var(--outline-hover-bg);
+}
+
+/* --- 3. メインコンテンツ (アウトライン + エディタ) --- */
+#main-content {
+  flex-grow: 1; 
+  display: flex; 
+  flex-direction: row;
+  overflow: hidden;
+  padding-right: 1%;
+  justify-content: center; 
+  padding-bottom: 25px; /* ステータスバーの高さ分 */
+  box-sizing: border-box;  
+}
+
+/* --- 4. アウトラインパネル --- */
+#outline-panel {
+  width: 150px; 
+  flex-shrink: 0;
+  display: flex; 
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--outline-bg-color);
+  font-family: var(--current-editor-font), sans-serif;
+  height: 100%; 
+}
+.outline-controls {
+  padding: 10px; 
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+
+#outline-container {
+  flex-grow: 1; 
+  overflow-y: auto; 
+  padding: 5px 0;
+}
+#outline-container::-webkit-scrollbar { width: 8px; }
+#outline-container::-webkit-scrollbar-track { background: transparent; }
+#outline-container::-webkit-scrollbar-thumb { background-color: var(--scrollbar-thumb-color);border-radius: 4px; }
+#outline-container::-webkit-scrollbar-thumb:hover { background-color: var(--scrollbar-thumb-hover-color); }
+
+/* --- 5. ファイルリストのスタイル --- */
+.file-list {
+  list-style: none; 
+  padding: 0; 
+  margin: 0;
+}
+.file-item {
+  border-bottom: 0px solid var(--outline-border-color); 
+  color: var(--outline-text-color);
+}
+
+/* アクティブなファイル名のスタイル */
+.file-item.active > .file-name {
+  background-color: var(--active-bg-color);
+}
+
+
+/* --- 6. 見出しツリーのスタイル --- */
+.file-item > ul { /* 見出しツリーのルート */
+  list-style-type: none; 
+  margin: 0 0 10px 0; 
+  padding: 5px 0 0 0;
+}
+.file-item ul ul { /* ネストしたリスト */
+  list-style-type: none;
+  padding-left: 15px;
+}
+.file-item ul li {
+  padding: 0;
+}
+/* 折りたたみ */
+.file-item ul li[data-collapsed="true"] > ul {
+  display: none;
+}
+
+.outline-item-wrapper {
+  display: flex; align-items: center; border-radius: 4px;
+  padding: 2px 10px;
+}
+/* アクティブな見出しのスタイル */
+.outline-item-wrapper:hover, .outline-item-wrapper.active {
+  background-color: var(--active-bg-color);
+}
+
+.outline-toggle {
+  width: 16px; height: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: var(--outline-text-color); flex-shrink: 0;
+}
+.outline-toggle.empty {
+  visibility: hidden; 
+}
+.outline-toggle.collapsed { transform: rotate(-90deg); }
+
+.outline-text {
+  cursor: pointer; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; padding: 0px; flex-grow: 1;
+  font-size: 12px; color: var(--outline-text-color);
+}
+
+
+/* --- 7. エディタコンテナ --- */
+#container {
+  width: 100%; 
+  max-width: 80ch;
+  display: flex;
+  flex-direction: column;
+  background: var(--editor-gradient);
+  margin-left: 20px;
+}
+
+
+
+.file-name {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  cursor: pointer;
+  word-break: break-word;
+}
+
+.file-name-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--outline-text-color);
+  flex-shrink: 1;
+  min-width: 0;  /* しかし、必要であればどこまでも縮むことを許可する (Flexboxの重要ハック) */
+}
+
+.file-item.active .file-name-text {
+  white-space: normal; /* 折り返しを許可 */
+  word-break: break-all; /* 単語の途中でも強制的に改行 */
+  overflow: visible;     /* はみ出しを許可 */
+}
+
+.close-tab-btn {
+  background: none;
+  border: none;
+  color: var(--outline-text-color);
+  font-size: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  visibility: hidden;
+  flex-shrink: 0; 
+}
+
+/* ファイル名にホバーした時だけ、閉じるボタンを表示 */
+.file-item:hover .close-tab-btn {
+  visibility: visible;
+}
+.close-tab-btn:hover {
+  background-color: var(--active-bg-color);
+  color: var(--file-text-color);
+}
+
+/* ★ ZENモード時に、.zen-hideクラスを持つ要素を非表示にする */
+body.zen-mode .zen-hide {
+  display: none;
+}
+.font-controls{
+  margin-left: 30px;
+}
+body.zen-mode #container {
+  width: 65%;
+  max-width: 80ch;
+  display: flex;
+  flex-direction: column;
+  background: var(--editor-gradient);
+  margin: 20px;
+  padding-left: 5%;
+}
+/* ZENモードボタンは常に表示 */
+#zen-mode-btn{
+  position: absolute;
+  margin-top: 10px;
+  -webkit-app-region: no-drag; 
+}
+
+/* a. Focusモード時、メインコンテンツのグリッド定義を"上書き"する */
+body.focus-mode #main-content {
+  /* ★ 3列グリッド: 左の余白 | テキストエリア | 右の余白 */
+  display: grid;
+  grid-template-columns: 1fr 35% 0.03fr;
+  padding-top: 2%;
+  padding-bottom:2%;
+  gap: 30px;
+}
+
+/* c. Focusモード時、エディタコンテナを"中央の2列目"に配置 */
+body.focus-mode #container {
+  grid-column: 2 / 3;
+  width: 100%; 
+  background-color: rgba(248, 245, 227, 0.7);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  padding-left: 15px;
+  padding-top: 10px;
+  padding-right: 5px;
+  overflow: hidden;
+}
+body.focus-mode #outline-panel{
+  background-color: rgba(248, 245, 227, 0.6);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);  
+  margin-left: 10px;
+}
+body.dark-mode #bg-cycle-btn,
+body.dark-mode #focus-mode-btn { /* Focusモードボタンも、ダークモードでは不要 */
+  display: none;
+}
+/* ドラッグ＆ドロップのフィードバック用スタイル */
+/* ★ セレクタを #container から .monaco-editor に変更 */
+.monaco-editor.drag-over {
+  outline: 2px dashed rgba(128, 128, 128, 0.7) !important;
+  outline-offset: -2px; /* 少し内側に */
+  background-color: rgba(200, 200, 200, 0.1);
+}
+
+body.dark-mode .monaco-editor.drag-over {
+  outline-color: rgba(200, 200, 200, 0.7) !important;
+  background-color: rgba(80, 80, 80, 0.2);
+}
+
+#outline-panel.hidden-by-shortcut {
+  display: none;
+}
+
+#status-bar {
+  position: fixed;
+  bottom: 0px; 
+  right: 0; 
+  width: 100%; 
+  height: 25px;
+  
+  display: flex; /* Flexboxで中身を右寄せ */
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 10px; /* 左右の余白 */
+  box-sizing: border-box;
+  font-family: 'PlemolJPHS Custom', Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  opacity: 70%;
+  color: var(--outline-text-color);
+  background-color: transparent; 
+  pointer-events: none;
+  
+  /* ★ フォーカスモードでは非表示に */
+  body.focus-mode & {
+    display: none;
+  };
+  body.zen-mode & {
+    display: none;
+  }  
+}
+
+#status-bar span {
+  margin-left: 1em;
+}
+
+/* 検索パネル全体 */
+.cm-panel.cm-search {
+  background-color: #f8f4e690; 
+  backdrop-filter: blur(8px);
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.15); 
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+body.dark-mode .cm-panel.cm-search {
+  background-color: rgba(40, 42, 54, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+}
+
+.cm-panel.cm-search > * {
+  background-color: transparent !important; 
+}
+
+/* 入力フィールド */
+.cm-search input {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #f8f8f2; /* テキスト色 */
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+.cm-search input:focus {
+  outline: 1px solid #bd93f9; /* フォーカス時の色 */
+  box-shadow: none;
+}
+
+/* ボタン */
+.cm-search button {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #f8f8f2;
+  border: none;
+  border-radius: 4px;
+  text-transform: none; /* 大文字化をやめる */
+  font-size: 1em;
+}
+.cm-search button:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+/* チェックボックスの隣のラベル */
+.cm-search label {
+  color: #b0b0b0;
+}

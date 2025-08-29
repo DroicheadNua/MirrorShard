@@ -1,0 +1,24 @@
+<!-- src/renderer/preview.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>preview</title>
+  <link rel="stylesheet" href="./src/assets/preview.css">
+</head>
+<body>
+  <div id="background-layer"></div>      
+    <div id="content" contenteditable="plaintext-only" spellcheck="false"></div>
+    <div id="ui-layer">
+    <div id="title-bar">
+        <div id="preview-controls">
+          <button id="snow-toggle-btn" title="降雪エフェクト(Ctrl+Shift+E)">※</button>
+          <button id="fullscreen-btn" title="フルスクリーン切替">⤢</button>
+          <button id="close-preview-btn" title="プレビューを閉じる">×</button>
+        </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/preview.ts"></script>
+</body>
+</html>

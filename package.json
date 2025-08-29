@@ -1,0 +1,107 @@
+{
+  "name": "mirrorshard",
+  "version": "1.0.0",
+  "description": "MirrorShard",
+  "main": "./out/main/index.js",
+  "author": "DroicheadNua",
+  "productName": "MirrorShard",
+  "license": "MIT",
+  "scripts": {
+    "format": "prettier --write .",
+    "lint": "eslint --cache .",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "postinstall": "electron-builder install-app-deps",
+    "build:unpack": "npm run build && electron-builder --dir",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:linux": "npm run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.28.3",
+    "@codemirror/lang-javascript": "^6.2.4",
+    "@codemirror/lang-markdown": "^6.3.4",
+    "@codemirror/language-data": "^6.5.1",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.38.1",
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "adm-zip": "^0.5.16",
+    "codemirror": "^6.0.2",
+    "electron-store": "^8.2.0",
+    "electron-updater": "^6.3.9",
+    "fontkit": "^2.0.4",
+    "jschardet": "^3.1.4"
+  },
+  "devDependencies": {
+    "@electron-toolkit/eslint-config-prettier": "^3.0.0",
+    "@electron-toolkit/eslint-config-ts": "^3.0.0",
+    "@electron-toolkit/tsconfig": "^1.0.1",
+    "@types/adm-zip": "^0.5.7",
+    "@types/node": "^22.16.5",
+    "electron": "^37.2.3",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^4.0.0",
+    "eslint": "^9.31.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.5"
+  },
+  "build": {
+    "appId": "com.DroicheadNua.mirrorshard",
+    "productName": "MirrorShard",
+    "files": [
+      "out/**/*",
+      "resources/**/*"
+    ],
+    "asar": true,
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources"
+      }
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png",
+      "compression": "maximum"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icon.png",
+      "fileAssociations": [
+        {
+          "ext": "md",
+          "name": "Markdown File",
+          "role": "Editor"
+        },
+        {
+          "ext": "txt",
+          "name": "Text File",
+          "role": "Editor"
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png",
+      "category": "Office;TextEditor;Development;",
+      "maintainer": "DroicheadNua"
+    },
+    "nsis": {
+      "shortcutName": "MirrorShard",
+      "oneClick": false
+    }
+  }
+}

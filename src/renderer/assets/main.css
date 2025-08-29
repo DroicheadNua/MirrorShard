@@ -1,0 +1,22 @@
+html, body, #editor {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background-color: #1a1b26; /* tokyo-nightテーマの背景色 */
+  font-family: sans-serif; /* デフォルトフォントを指定 */
+}
+/* src/renderer/assets/main.css の末尾に追記 */
+body {
+  display: flex;
+  flex-direction: column;
+}
+.controls {
+  padding: 4px 8px;
+  background-color: #24283b;
+  color: #c0caf5;
+  flex-shrink: 0; /* ウィンドウが縮んでも潰れないようにする */
+}
+#editor {
+  flex-grow: 1; /* 残りの高さをすべて使う */
+}
