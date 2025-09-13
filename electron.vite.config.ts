@@ -23,6 +23,8 @@ export default defineConfig({
           main_window: resolve(__dirname, 'src/renderer/index.html'),
           preview_window: resolve(__dirname, 'src/renderer/preview.html'),
           shortcut_window: resolve(__dirname, 'src/renderer/shortcut.html'),
+          settings_window: resolve(__dirname, 'src/renderer/settings.html'),
+          export_window: resolve(__dirname, 'src/renderer/export.html')
         }
       }
     }

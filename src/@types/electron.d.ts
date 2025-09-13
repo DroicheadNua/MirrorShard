@@ -1,22 +1,63 @@
-interface fontsInfo {
+// ★★★ サイクルフォント用とシステムフォント用の、2つの型を定義 ★★★
+interface CycleFontsInfo {
+  isSystemFont?: false; // システムフォントではないことを示すフラグ
   availablefonts: string[];
   currentFontName: string;
 }
+interface SystemFontInfo {
+  isSystemFont: true; // システムフォントであることを示すフラグ
+  fontData: {
+    cssFontFamily: string;
+    base64: string;
+    format: string;
+  };
+}
+// ★★★ fontsInfoは、このどちらかの型になる ★★★
+type FontsInfo = CycleFontsInfo | SystemFontInfo;
+
 interface ContentInfo {
   content: string;
   fontsize: number;
   lineNumber: number;
 }
 
+interface ExportOptions {
+  sourceFilePath: string;
+  encoding: string;
+  title: string;
+  author: string;
+  coverImagePath: string | null;
+  isVertical: boolean;
+  useRubyFilter: boolean;
+  format: 'epub' | 'html'| 'pdf'; 
+}
+
 export interface IElectronAPI {
   // ファイル操作
-  openFile: () => Promise<{ filePath: string; content: string; encoding: string; eol: 'LF' | 'CRLF' } | null>;
-  readFile: (filePath: string) => Promise<{ content: string; encoding: string; eol: 'LF' | 'CRLF' } | null>;
+  openFile: () => Promise<{ 
+    filePath: string; 
+    content: string; 
+    encoding: string; 
+    eol: "LF" | "CRLF";
+    warning?: string; // ★
+  } | null>;
+  
+  readFile: (filePath: string) => Promise<{ 
+    content: string; 
+    encoding: string; 
+    eol: "LF" | "CRLF";
+    warning?: string; // ★
+  } | null>;
   saveFile: (
     filePath: string | null,
     content: string,
     options: { encoding: string; eol: 'LF' | 'CRLF' }
-  ) => Promise<string | null>;
+  ) => Promise<{
+    success: boolean;
+    path?: string;
+    cancelled?: boolean;
+    error?: string;
+  }>;
   
   // ウィンドウ操作 (メインウィンドウ用)
   quitApp: () => void;
@@ -62,12 +103,19 @@ export interface IElectronAPI {
   getFontIndex: () => Promise<number>;
   setFontIndex: (index: number) => void;  
 
-  openPreviewWindow: (data: { initialContent: ContentInfo; fontsInfo: fontsInfo; }) => void;
+  openPreviewWindow: (data: {
+    initialContent: ContentInfo;
+    fontsInfo: FontsInfo;
+  }) => void;
   updatePreview: (data: ContentInfo) => void;
   updatePreviewFont: (fontName: string) => void;
 
   // main -> preview
-  onInitializePreview: (callback: (data: { initialContent: ContentInfo; fontsInfo: fontsInfo; isDarkMode: boolean; }) => void) => () => void;
+  onInitializePreview: (callback: (data: {
+    initialContent: ContentInfo;
+    fontsInfo: FontsInfo;
+    isDarkMode: boolean;
+  }) => void) => () => void;
   onUpdatePreview: (callback: (data: ContentInfo) => void) => () => void;
   onPreviewFontChange: (callback: (fontName: string) => void) => () => void;
   getbgmList: () => Promise<string[]>;
@@ -124,6 +172,31 @@ export interface IElectronAPI {
   requestGlobalFontCycle: () => void;
   requestGlobalBgmCycle: () => void;
   requestGlobalBgmPlayPause: () => void;
+  scanSystemFonts: (force: boolean) => Promise<{ family: string; path: string; }[]>;
+  getFontBase64: (filePath: string) => Promise<string | null>;
+  // ★ メインウィンドウにフォント変更を"命令"するためのAPI
+  applyFontToMainWindow: (fontData: { path: string; cssFontFamily: string; base64: string; format: string }) => void;
+  onApplySystemFontFromSettings: (callback: (fontData: { path: string; cssFontFamily: string; base64: string; format: string }) => void) => () => void;
+  toggleSettingsWindow: () => void;
+
+  getAppliedSystemFontPath: () => Promise<string | undefined>;
+  setAppliedSystemFontPath: (filePath: string | null) => Promise<void>;
+  clearFontIndex: () => void;  
+  closeSettingsWindow: () => void;
+  selectImageDialog: () => Promise<string | null>;
+  runExport: (options: ExportOptions) => Promise<{ success: boolean; error?: string }>;  
+  onRequestExportWindow: (callback: () => void) => () => void;
+  getPandocPath: () => Promise<string>;
+  setPandocPath: (path: string) => void;
+  openExternalLink: (url: string) => void;  
+  selectFileDialog: (options: FileDialogOptions) => Promise<string | null>;
+  openExportWindow: (filePath: string) => void;
+  getTargetFilePath: () => Promise<string | null>;
+  closeExportWindow: () => void;  
+  setExportBusyState: (isBusy: boolean) => void;
+  showEncodingWarningDialog: (message: string) => void;
+  confirmSaveWithEncodingWarning: (fileName: string) => Promise<boolean>;
+  analyzeSourceFile: (filePath: string) => Promise<{ encoding: string; eol: 'LF' | 'CRLF'; } | null>;
 }
 
 // グローバルなwindowオブジェクトにelectronAPIが存在することを宣言

@@ -1,12 +1,16 @@
 // src/main/index.ts
 import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol } from 'electron'
 import { join, basename, extname } from 'path'
-import jschardet from 'jschardet'
+import * as Encoding from 'encoding-japanese';
 import { electronApp, is } from '@electron-toolkit/utils'
 import AdmZip from 'adm-zip'
 import Store from 'electron-store'
 import { promises as fsPromises, existsSync, writeFileSync, readFileSync, statSync, cpSync } from 'fs'
-import iconv from 'iconv-lite'
+import os from 'os';
+import * as fontkit from 'fontkit';
+import { ExportOptions } from '../@types/electron';
+import util from 'util';
+import { exec } from 'child_process'; 
 
 // --- [エリア 1: 型定義 & グローバル変数] ---
 interface StoreType {
@@ -24,6 +28,9 @@ interface StoreType {
   isFocusMode: boolean;
   isZenMode: boolean;
   windowBounds?: { x: number; y: number; width: number; height: number; };
+  appliedSystemFontPath?: string;
+  pandocPath?: string;
+  kindlegenPath?: string;  
 }
 
 const store = new Store<StoreType>({ 
@@ -41,7 +48,9 @@ const store = new Store<StoreType>({
     isDarkMode: false,
     isFocusMode: false,
     isZenMode: false,
-    windowBounds: undefined    
+    windowBounds: undefined,
+    pandocPath: 'pandoc',
+    kindlegenPath: 'kindle',    
   }
 });
 const userDataPath = app.getPath('userData');
@@ -49,12 +58,18 @@ const iconPath = join(__dirname, '../../resources/icon.png');
 const historyFilePath = join(userDataPath, 'history.json');
 const MAX_HISTORY = 10;
 const PREVIEW_TEXT_LIMIT = 500000;
+const fontCachePath = join(app.getPath('userData'), 'system-fonts.json');
+const execPromise = util.promisify(exec);
 let previewWindow: BrowserWindow | null = null;
 let shortcutWindow: BrowserWindow | null = null;
+let settingsWindow: BrowserWindow | null = null;
 let isQuitting = false;
 let fileToOpenOnStartup: string | null = null;
+let exportWindow: BrowserWindow | null = null;
+let isExporting = false;
 
 // --- [エリア 2: ヘルパー関数] ---
+
 function ensureUserResources(): void {
   try {
     // a. パスを定義
@@ -78,51 +93,86 @@ function ensureUserResources(): void {
     app.quit();
   }
 }
-async function analyzeFile(filePath: string): Promise<{ content: string; encoding: string; eol: 'LF' | 'CRLF' }> {
-    const buffer = await fsPromises.readFile(filePath);
-    
-    // ★★★ BOMチェックを最優先で行う ★★★
-    if (buffer.length >= 2) {
-        if (buffer[0] === 0xFF && buffer[1] === 0xFE) {
-            // UTF-16 LE BOMが見つかった場合
-            const content = iconv.decode(buffer, 'utf16le');
-            const eol = content.includes('\r\n') ? 'CRLF' : 'LF';
-            return { content: content.replace(/\r\n/g, '\n'), encoding: 'utf16le', eol };
-        }
-        if (buffer[0] === 0xFE && buffer[1] === 0xFF) {
-            // UTF-16 BE BOM
-            const content = iconv.decode(buffer, 'utf16be');
-            const eol = content.includes('\r\n') ? 'CRLF' : 'LF';
-            return { content: content.replace(/\r\n/g, '\n'), encoding: 'utf16be', eol };
-        }
-        if (buffer.length >= 3 && buffer[0] === 0xEF && buffer[1] === 0xBB && buffer[2] === 0xBF) {
-            // UTF-8 BOM
-            const content = iconv.decode(buffer, 'utf8');
-            const eol = content.includes('\r\n') ? 'CRLF' : 'LF';
-            return { content: content.replace(/\r\n/g, '\n'), encoding: 'utf8', eol };
-        }
+
+async function analyzeFile(filePath: string): Promise<{
+  content: string;
+  encoding: string;
+  eol: 'LF' | 'CRLF';
+  warning?: string;
+}> {
+  const buffer = await fsPromises.readFile(filePath);
+  let warning: string | undefined = undefined;
+
+  // --- ステップ1: encoding-japaneseによる、唯一の、そして最高の自動判定 ---
+  //    BOMの有無も、この関数が内部で賢く処理してくれます
+  const detectedEncoding = Encoding.detect(buffer) as Encoding.Encoding | false;
+
+  // --- ステップ2: 判定結果に基づいて、デコードと状態決定を行う ---
+  let content: string;
+  let finalEncoding: string;
+  
+  // a) もし、何らかのエンコーディングが検出されたら...
+  if (detectedEncoding) {
+    let encodingToUse = detectedEncoding;
+    // a) ASCIIと判定されたものは、常にUTF-8として扱う
+    if (detectedEncoding === 'ASCII') {
+      encodingToUse = 'UTF8';
     }
     
-    // ★ BOMがない場合、jschardetによる推測を行う
-    const detResult = jschardet.detect(buffer);
-    let encoding = 'utf8';
-    if (detResult && detResult.encoding && detResult.confidence > 0.9 && iconv.encodingExists(detResult.encoding)) {
-        encoding = detResult.encoding.toLowerCase();
-    }
-    
-    // 最後のフォールバック
+    // b) ★ UTF32は、現在のiconv-lite/encoding-japaneseでは安定して扱えないことが多い
+    //    警告付きで、安全なUTF-8にフォールバックする
+    if (detectedEncoding === 'UTF32') {
+      encodingToUse = 'UTF8';
+      warning = `UTF-32は現在サポートされていません。安全のためUTF-8として開きます。文字化けしている場合は保存せずに閉じてください。`;
+    }    
     try {
-        const content = iconv.decode(buffer, encoding);
-        const eol = content.includes('\r\n') ? 'CRLF' : 'LF';
-        return { content: content.replace(/\r\n/g, '\n'), encoding, eol };
+      // そのエンコーディングでデコードを試みる
+      content = Encoding.convert(buffer, { to: 'UNICODE', from: encodingToUse, type: 'string' });
+      finalEncoding = encodingToUse;
+
+      // b) ただし、SJISの可能性も探る（安全のための警告）
+      if ((encodingToUse === 'UTF8') && isSjis(buffer)) {
+        warning = `このファイルの文字コードはUTF-8と推定されましたが、Shift_JISである可能性もあります...`;
+      }
+
     } catch (e) {
-        // もしデコードに失敗したら、最終手段としてUTF-8で開く
-        console.warn(`Decoding with ${encoding} failed. Falling back to UTF-8.`);
-        const content = iconv.decode(buffer, 'utf8');
-        const eol = content.includes('\r\n') ? 'CRLF' : 'LF';
-        return { content: content.replace(/\r\n/g, '\n'), encoding: 'utf8', eol };
+      // c) 検出されたエンコーディングでのデコードに失敗した場合（非常に稀）
+      content = Encoding.convert(buffer, { to: 'UNICODE', from: 'UTF8', type: 'string' });
+      finalEncoding = 'UTF8';
+      warning = `エンコード'${detectedEncoding}'のデコードに失敗しました。UTF-8として開きます。`;
     }
+  } 
+  // d) もし、何も検出できなかったら...
+  else {
+    content = Encoding.convert(buffer, { to: 'UNICODE', from: 'UTF8', type: 'string' });
+    finalEncoding = 'UTF8';
+    warning = `文字コードを自動判別できませんでした。UTF-8として開きます。`;
+  }
+
+  // --- ステップ3: EOLを検出し、内容を正規化して返す ---
+  const eol: 'LF' | 'CRLF' = content.includes('\r\n') ? 'CRLF' : 'LF';
+  const normalizedContent = content.replace(/\r\n/g, '\n');
+
+  // 表示用のエンコーディング名を整形
+  if (finalEncoding === 'SJIS') finalEncoding = 'Shift_JIS';
+  if (finalEncoding === 'EUCJP') finalEncoding = 'EUC-JP';
+  if (finalEncoding === 'JIS') finalEncoding = 'ISO-2022-JP';
+  
+  return { content: normalizedContent, encoding: finalEncoding, eol, warning };
 }
+
+// isSjisを、encoding-japaneseを使って再実装
+function isSjis(buffer: Buffer): boolean {
+  try {
+    const sjisStr = Encoding.convert(buffer, { to: 'UNICODE', from: 'SJIS', type: 'string'});
+    const reEncodedBuffer = Encoding.convert(sjisStr, { from: 'UNICODE', to: 'SJIS', type: 'buffer' });
+    // SJISとしてデコードし、再度エンコードした結果が、元のバイト列と一致するか
+    return buffer.equals(reEncodedBuffer);
+  } catch (e) {
+    return false;
+  }
+}
+
 function loadHistory(): string[] {
   try {
     if (existsSync(historyFilePath)) {
@@ -415,7 +465,31 @@ submenu: [
       click: () => {
         toggleShortcutWindow();
       }
-    }
+    },
+    {
+      label: 'Settings',
+      accelerator: 'F2',
+      click: () => {
+        toggleSettingsWindow();
+      }
+    }, 
+    {
+      label: 'Export As...',
+      accelerator: 'CmdOrCtrl+E', 
+      click: () => {
+        if (isExporting) {
+          dialog.showMessageBox({ type: 'info', message: 'エクスポート処理の実行中です。' });
+          exportWindow?.focus(); // 既存のウィンドウにフォーカスを当てる
+          return;
+        }
+        
+        if (exportWindow && !exportWindow.isDestroyed()) {
+          exportWindow.close();
+        } else {
+          BrowserWindow.getFocusedWindow()?.webContents.send('request-export-window');
+        }
+      }
+    },
   ]
 }
   ];
@@ -438,6 +512,12 @@ submenu: [
 function toggleShortcutWindow() {
   if (shortcutWindow && !shortcutWindow.isDestroyed()) {
     shortcutWindow.close();
+  }  
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.close();
+  }  
+  if (exportWindow && !exportWindow.isDestroyed()) {
+    exportWindow.close();   
   } else {
     // ★ 親ウィンドウ（メインウィンドウ）を取得
     const parentWindow = BrowserWindow.getAllWindows().find(w => w.isVisible());
@@ -485,6 +565,69 @@ function toggleShortcutWindow() {
   }
 }
 
+function toggleSettingsWindow() {
+  if (shortcutWindow && !shortcutWindow.isDestroyed()) {
+    shortcutWindow.close();
+  }  
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.close();
+  }  
+  if (exportWindow && !exportWindow.isDestroyed()) {
+    exportWindow.close();   
+  } else {
+    // ★ 親ウィンドウ（メインウィンドウ）を取得
+    const parentWindow = BrowserWindow.getAllWindows().find(w => w.isVisible());
+    if (!parentWindow) return; // 親がいなければ開かない
+
+
+
+    settingsWindow = new BrowserWindow({
+      // ★ 親の高さに合わせ、幅は少し狭くする
+      minWidth:520,
+      minHeight:480,
+      width: 520,
+      height: 480, 
+      title: 'Settings',
+      parent: parentWindow, // 親を指定
+      modal: false,
+      frame: false,
+      show: false,
+      webPreferences: {
+        // ★★★ 設定ウィンドウ専用のpreloadを指定 ★★★
+        preload: join(__dirname, '../preload/index.js'),
+        sandbox: false, // 必要に応じて
+      }
+    });
+    settingsWindow.webContents.on('did-finish-load', () => {
+      if (process.platform === 'darwin') { // もしmacOSなら
+        const css = `.mac-only { display: inline !important; }`;
+        settingsWindow?.webContents.insertCSS(css);
+      }
+    });
+    // ESCキーで閉じられるようにする
+    settingsWindow.webContents.on('before-input-event', (event, input) => {
+        if (input.key === 'Escape') {
+            settingsWindow?.close();
+            event.preventDefault();
+        }
+    });
+
+    settingsWindow.on('closed', () => { settingsWindow = null; });
+    
+    // パスを解決してロード
+    const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
+    if (is.dev && rendererUrl) {
+      settingsWindow.loadURL(`${rendererUrl}/settings.html`);
+    } else {
+      settingsWindow.loadFile(join(__dirname, '../renderer/settings.html'));
+    }
+
+    settingsWindow.on('ready-to-show', () => settingsWindow?.show());
+  }
+}
+
+
+
 function openFileInWindow(filePath: string): void {
   addToHistory(filePath);
   buildMenu();
@@ -524,6 +667,12 @@ function createWindow(filePath?: string | null): void {
     mainWindowOptions.icon = iconPath; 
   }
 
+  // ★★★ 1. show: false に戻す ★★★
+  mainWindowOptions.show = false; 
+
+  // ★★★ 2. 背景色を指定して、OSの白い枠のチラつきを防ぐ ★★★
+  mainWindowOptions.backgroundColor = '#444444'; // ダークモードの背景色に合わせておく
+
 const mainWindow = new BrowserWindow(mainWindowOptions);  
 
   // ウィンドウが移動/リサイズされたら、"debounce"して保存する
@@ -555,6 +704,83 @@ const mainWindow = new BrowserWindow(mainWindowOptions);
   }
 }
 
+async function scanSystemFontsInternal(): Promise<{ family: string; path: string }[]> {
+  console.log('[FontManager] Scanning system fonts...');
+  try {
+    const fontList: { family: string; path: string }[] = [];
+    const seenFamilies = new Set<string>();
+    const platform = os.platform();
+
+    if (platform === 'linux') {
+      // --- Linuxの場合: globを動的にインポートして、再帰的に検索 ---
+      try {
+        const { glob } = await import('glob');
+        const searchPatterns = [
+          '/usr/share/fonts/**/*.ttf', '/usr/share/fonts/**/*.otf',
+          '/usr/local/share/fonts/**/*.ttf', '/usr/local/share/fonts/**/*.otf',
+          join(os.homedir(), '.fonts', '**/*.ttf'), join(os.homedir(), '.fonts', '**/*.otf'),
+          join(os.homedir(), '.local', 'share', 'fonts', '**/*.ttf'), join(os.homedir(), '.local', 'share', 'fonts', '**/*.otf'),
+        ];
+        const fontPaths = await glob(searchPatterns, { nodir: true, dot: false });
+
+        for (const filePath of fontPaths) {
+          try {
+            const font = fontkit.openSync(filePath);
+            const fontsInFile = 'fonts' in font ? (font as any).fonts : [font];
+            for (const f of fontsInFile) {
+              if (f.familyName && !seenFamilies.has(f.familyName)) {
+                fontList.push({ family: f.familyName, path: filePath });
+                seenFamilies.add(f.familyName);
+              }
+            }
+          } catch (e) { /* 壊れたフォントはスキップ */ }
+        }
+      } catch (e) { console.error('Glob dynamic import or execution failed:', e); }
+
+    } else {
+      // --- WindowsとmacOSの場合: readdirで、指定されたフォルダだけを検索 ---
+      const fontDirs: string[] = [];
+      if (platform === 'win32') {
+        fontDirs.push(join(os.homedir(), 'AppData', 'Local', 'Microsoft', 'Windows', 'Fonts'));
+        fontDirs.push('C:\\Windows\\Fonts');
+      } else if (platform === 'darwin') {
+        fontDirs.push(join(os.homedir(), 'Library', 'Fonts'));
+        fontDirs.push('/Library/Fonts');
+        fontDirs.push('/System/Library/Fonts');
+      }
+      
+      for (const dir of fontDirs) {
+        if (!existsSync(dir)) continue;
+        try {
+          const files = await fsPromises.readdir(dir);
+          for (const file of files) {
+            if (/\.(ttf|otf|ttc)$/i.test(file)) {
+              const filePath = join(dir, file);
+              try {
+                const font = fontkit.openSync(filePath);
+                const fontsInFile = 'fonts' in font ? (font as any).fonts : [font];
+                for (const f of fontsInFile) {
+                  if (f.familyName && !seenFamilies.has(f.familyName)) {
+                    fontList.push({ family: f.familyName, path: filePath });
+                    seenFamilies.add(f.familyName);
+                  }
+                }
+              } catch (e) {}
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
+    fontList.sort((a, b) => a.family.localeCompare(b.family));
+    return fontList;
+
+  } catch (err) {
+    console.error('[FontManager] System font scan failed:', err);
+    return [];
+  }
+}
+
 // --- [エリア 3: IPCハンドラ] ---
 function setupIpcHandlers(): void {
 
@@ -578,36 +804,119 @@ function setupIpcHandlers(): void {
     } catch (e) { console.error(`Failed to read file: ${filePath}`, e); }
     return null;
   });
-  ipcMain.handle('file:saveFile', async (_event, filePath: string | null, content: string, 
-    options: { encoding: string; eol: 'LF' | 'CRLF' }) => {
-    let finalPath = filePath;
-    if (!finalPath) {
-      const { canceled, filePath: newFilePath } = await dialog.showSaveDialog({
+
+ipcMain.handle('file:saveFile', async (
+  _event,
+  filePath: string | null,
+  content: string,
+  options: { encoding: string; eol: 'LF' | 'CRLF' }
+) => {
+  console.log('[Main] Received save request with options:', options);
+
+  let finalPath = filePath;
+
+  if (!finalPath) {
+    const { canceled, filePath: newFilePath } = await dialog.showSaveDialog({
       title: '名前を付けて保存',
       defaultPath: 'untitled.txt',
       filters: [
-        { name: 'Text File', extensions: ['txt'] },        
+        { name: 'Text File', extensions: ['txt'] },
         { name: 'Markdown', extensions: ['md'] },
         { name: 'All Files', extensions: ['*'] }
-      ]});
-      if (canceled || !newFilePath) return null;
-      finalPath = newFilePath;
+      ]
+    });
+    if (canceled || !newFilePath) {
+      return { success: false, cancelled: true };
     }
+    finalPath = newFilePath;
+  }
+  
+  // ★★★ ここからが、Atomic Saveの実装です ★★★
+  const tempFilePath = `${finalPath}.${Date.now()}-${Math.random().toString(36).substring(2)}.tmp`;
+
+  try {
+    // --- 1. すべての変換処理は、これまで通り完璧 ---
+    const contentToSave = options.eol === 'CRLF' ? content.replace(/\n/g, '\r\n') : content;
+    const convertedData = Encoding.convert(contentToSave, {
+      from: 'UNICODE',
+      to: options.encoding as Encoding.Encoding,
+      type: 'buffer'
+    });
+    const bufferToWrite = Buffer.from(convertedData);
+
+    // ★★★ 1.5 書き込み前に、元のファイルサイズを記憶しておく ★★★
+    let originalSize = -1; // -1は「ファイルが存在しなかった」
+    if (finalPath && existsSync(finalPath)) {
+      try {
+        originalSize = (await fsPromises.stat(finalPath)).size;
+      } catch (e) { /* statに失敗しても、処理は続行 */ }
+    }
+
+    // --- 2. ★ 書き込み先を、一時ファイルに変更 ---
+    await fsPromises.writeFile(tempFilePath, bufferToWrite);
+
+    // 2.5 セーフティネット
+    const newSize = (await fsPromises.stat(tempFilePath)).size;
+    // もし、元のファイルが存在し(>=0)、かつ、新しいファイルが0バイトか、
+    // あるいは元のサイズの半分以下に"不自然に"減少していたら...
+    if (originalSize >= 0 && (newSize === 0 || newSize < originalSize * 0.5)) {
+      const choice = await dialog.showMessageBox({
+        type: 'error',
+        title: '保存警告',
+        message: `保存後のファイルサイズが、異常に減少 (${originalSize} bytes -> ${newSize} bytes) しました。`,
+        detail: 'これは、エンコーディングの変換エラーなどにより、データの一部が失われたことを示唆しています。本当にこの内容で上書き保存しますか？\n\n「いいえ」を選択して、内容を確認することを強く推奨します。',
+        buttons: ['はい、上書き保存します', 'いいえ、キャンセルします'],
+        defaultId: 1,
+        cancelId: 1,
+      });
+
+      if (choice.response === 1) { // キャンセルが押された
+        // ★ エラーをthrowするのではなく、キャンセルされたことを示すオブジェクトを返す
+        //   まず一時ファイルを削除
+        if (existsSync(tempFilePath)) await fsPromises.unlink(tempFilePath);
+        return { success: false, cancelled: true };
+      }
+    }
+
+    // --- 3. ★ 書き込みが成功したら、リネームで元のファイルを上書き ---
+    await fsPromises.rename(tempFilePath, finalPath);
+
+    // --- 4. 成功後の処理 (変更なし) ---
+    addToHistory(finalPath);
+    buildMenu();
+    return { success: true, path: finalPath };
+
+  } catch (e: any) {
+    console.error(`Failed to save file atomically: ${finalPath}`, e);
+    dialog.showErrorBox('保存失敗', `ファイルの保存中にエラーが発生しました。\n\n${e.message}`);
+    
+    // ★ 5. 失敗した場合、一時ファイルが残っていれば削除する後始末
     try {
-      const contentToSave = options.eol === 'CRLF' ? content.replace(/\n/g, '\r\n') : content;
-      const buffer = iconv.encode(contentToSave, options.encoding || 'utf8');
-      await fsPromises.writeFile(finalPath, buffer);
-      addToHistory(finalPath);
-      buildMenu();
-      return finalPath;
-    } catch (e) { console.error(`Failed to save file: ${finalPath}`, e); }
-    return null;
-  });
+      if (existsSync(tempFilePath)) {
+        await fsPromises.unlink(tempFilePath);
+      }
+    } catch (cleanupError) {
+      console.error('Failed to clean up temporary save file:', cleanupError);
+    }
+
+    return { success: false, cancelled: false, error: e.message };
+  }
+});
+
   ipcMain.on('add-to-history', (_event, filePath: string) => { addToHistory(filePath); buildMenu(); });
   ipcMain.on('files-dropped', (_event, filePaths: string[]) => { filePaths.forEach(openFileInWindow); });
   ipcMain.on('session-save', (_event, filePaths: string[]) => {
     store.set('sessionFilePaths', filePaths.filter((p): p is string => p !== null));
   });
+
+  ipcMain.on('renderer-ready', (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (window) {
+    console.log('[Main] Renderer is ready. Showing window.');
+    window.show();
+    window.focus();
+  }
+});
 
   // --- ウィンドウ操作 ---
   ipcMain.on('quit-app', () => app.quit());
@@ -679,13 +988,40 @@ function setupIpcHandlers(): void {
   } else {
     previewWindow.loadFile(join(__dirname, '../renderer/preview.html'));
   }
-    previewWindow.webContents.on('did-finish-load', () => {
-      const finalData = {
-        ...data,
-        isDarkMode: store.get('isDarkMode', false) // electron-storeから最新の状態を取得
-      };
-      previewWindow?.webContents.send('initialize-preview', finalData);
-    });
+  previewWindow.webContents.on('did-finish-load', () => {
+    
+    // 1. まず、rendererから受け取ったデフォルトのデータで初期化命令を送る
+    const initialData = {
+      ...data,
+      isDarkMode: store.get('isDarkMode', false),
+    };
+    previewWindow?.webContents.send('initialize-preview', initialData);
+    
+    // 2. "その後"、バックグラウンドでシステムフォントのチェックと読み込みを開始
+    const appliedSystemFontPath = store.get('appliedSystemFontPath') as string | undefined;
+    
+    if (appliedSystemFontPath && existsSync(appliedSystemFontPath)) {
+      
+      // ★ `await`を使わず、`.then()`で非同期チェーンを構築する
+      fsPromises.readFile(appliedSystemFontPath, 'base64')
+        .then(base64 => {
+          // 読み込みが成功したら、
+          const family = appliedSystemFontPath.split(/[\\/]/).pop()?.split('.').slice(0, -1).join('.') || 'system-font';
+          const cssFontFamily = `system-font-${family.replace(/[\s]/g, '_')}`;
+          const format = extname(appliedSystemFontPath).substring(1);
+          
+          // プレビューウィンドウに「このシステムフォントで上書きして」と、追加の命令を送る
+          previewWindow?.webContents.send('apply-system-font-from-settings', {
+            cssFontFamily,
+            base64,
+            format
+          });
+        })
+        .catch(e => {
+          console.error('Failed to load applied system font for preview in background:', e);
+        });
+    }
+  });
       previewWindow.on('show', () => {
       parentWindow?.focus();
     });
@@ -715,6 +1051,285 @@ function setupIpcHandlers(): void {
     });
     return choice.response === 0; // 「プレビューする」が押されたらtrue
   });
+  ipcMain.on('close-settings-window', () => {
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.close();
+    }
+  });
+  ipcMain.on('close-export-window', () => {
+    if (exportWindow && !exportWindow.isDestroyed()) {
+      exportWindow.close();
+    }
+  });
+
+ipcMain.handle('get-pandoc-path', () => {
+  // ストアからパスを取得。見つからなければ'pandoc'をデフォルト値とする。
+  return store.get('pandocPath', 'pandoc');
+});
+
+ipcMain.on('set-pandoc-path', (_event, path: string) => {
+  store.set('pandocPath', path);
+  console.log(`[Store] Pandoc path set to: ${path}`);
+});
+
+// ★ settings.tsの<a>タグから呼ばれる、外部リンクを開くための安全なハンドラ
+ipcMain.on('open-external-link', (_event, url: string) => {
+  // URLがhttpまたはhttpsで始まることを検証してから開くのが、より安全
+  if (url.startsWith('http:') || url.startsWith('https:')) {
+    shell.openExternal(url);
+  }
+});
+
+ipcMain.handle('select-file-dialog', async (_event, options) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    ...options
+  });
+  if (canceled || filePaths.length === 0) return null;
+  return filePaths[0];
+});
+
+ipcMain.handle('get-target-file-path', (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  return (window as any).targetFilePath || null;
+});
+
+
+
+ipcMain.on('open-export-window', (_event, filePath: string) => {
+  // 排他制御
+  if (shortcutWindow && !shortcutWindow.isDestroyed()) {
+    shortcutWindow.close();
+  }  
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.close();
+  }  
+  if (exportWindow && !exportWindow.isDestroyed()) {
+    exportWindow.close();    
+  }
+  
+  const mainWindow = BrowserWindow.getFocusedWindow();
+
+  exportWindow = new BrowserWindow({
+    width: 520,
+    height: 700,
+    minWidth: 520,
+    minHeight: 700,
+    parent: mainWindow || undefined,
+    modal: false,
+    show: false,
+    frame: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'), // 共通のpreloadを使う
+      sandbox: false,
+    }
+  });
+
+      exportWindow.on('close', (event) => {
+        // もし、エクスポート中なら、閉じるのをキャンセル
+        if (isExporting) {
+          event.preventDefault();
+          dialog.showMessageBox(exportWindow!, {
+            type: 'warning',
+            title: '処理中です',
+            message: 'エクスポート処理の実行中です。'
+          });
+        }
+      });
+
+      exportWindow.webContents.on('before-input-event', (event, input) => {
+        if (input.key === 'Escape') {
+            exportWindow?.close();
+            event.preventDefault();
+        }
+    });
+
+  // ★ ウィンドウ自身に、対象のファイルパスを記憶させる
+  (exportWindow as any).targetFilePath = filePath;
+  
+  // URLをロード
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
+  if (is.dev && rendererUrl) {
+    exportWindow.loadURL(`${rendererUrl}/export.html`);
+  } else {
+    exportWindow.loadFile(join(__dirname, '../renderer/export.html'));
+  }
+
+  exportWindow.on('ready-to-show', () => {
+    exportWindow?.show();
+  });
+  
+  exportWindow.on('closed', () => {
+    exportWindow = null;
+  });
+});
+
+ipcMain.on('set-export-busy-state', (_event, isBusy: boolean) => {
+  isExporting = isBusy;
+  console.log(`[Main] Export busy state set to: ${isBusy}`);
+});  
+
+// ★★★ Pandoc実行ハンドラ ★★★
+ipcMain.handle('run-export', async (_event, options: ExportOptions) => {
+  isExporting = true;
+  const {
+    sourceFilePath,
+    encoding,
+    title,
+    author,
+    coverImagePath,
+    isVertical,
+    useRubyFilter,
+    format
+  } = options;
+
+  // --- [ステップ 1: Pandocの存在チェック & 保存先の決定] ---
+  let pandocPath = store.get('pandocPath', 'pandoc');
+  let isPandocFound = false;
+  try {
+    await execPromise(`"${pandocPath}" --version`);
+    isPandocFound = true;
+  } catch {
+    const defaultPaths: string[] = [];
+    const platform = os.platform();
+    if (platform === 'win32') {
+      defaultPaths.push(join(process.env['ProgramFiles'] || 'C:\\Program Files', 'Pandoc', 'pandoc.exe'));
+      defaultPaths.push(join(process.env['LOCALAPPDATA'] || '', 'Pandoc', 'pandoc.exe')); // ★ ローカルインストール先
+    } else if (platform === 'darwin') {
+      defaultPaths.push('/usr/local/bin/pandoc');
+    } else { // Linux
+      defaultPaths.push('/usr/bin/pandoc');
+    }
+
+    for (const p of defaultPaths) {
+      if (existsSync(p)) {
+        pandocPath = p;
+        isPandocFound = true;
+        store.set('pandocPath', pandocPath);
+        break;
+      }
+    }
+  }
+
+  if (!isPandocFound) {
+    dialog.showErrorBox('Pandoc Not Found', 'Pandocが見つかりません。「高度な設定」でパスを指定してください。');
+    return { success: false, error: 'Pandoc not found' };
+  }  
+
+  const { canceled, filePath: outputPath } = await dialog.showSaveDialog({
+    title: `Export as ${format.toUpperCase()}`,
+    defaultPath: `${basename(sourceFilePath, extname(sourceFilePath))}.${format}`,
+    filters: [{ name: format.toUpperCase(), extensions: [format] }],
+  });
+  if (canceled || !outputPath) return { success: false, error: 'Cancelled' };
+
+  // --- [ステップ 2: Markdownの前処理 (全フォーマット共通)] ---
+  const tempDir = app.getPath('temp');
+  const tempMdPath = join(tempDir, 'processed.md');
+  try {
+    // --- [ステップ 1: 正しいエンコーディングでファイルを読み込み、UTF-8に変換] ---
+    // a) まず、ファイルをバイナリ(Buffer)として読み込む
+    const buffer = await fsPromises.readFile(sourceFilePath);
+    
+    // b) rendererから渡された、"正しい"エンコーディング情報を使って、UNICODE(JS内部文字列)にデコード
+    const decodedMarkdown = Encoding.convert(buffer, {
+      to: 'UNICODE',
+      from: encoding as Encoding.Encoding, // rendererがanalyzeFileで特定したエンコーディング
+      type: 'string'
+    });
+
+    // --- [ステップ 2: JavaScriptで、完璧な前処理を行う] ---
+    // a) 改行処理
+    let processedText = decodedMarkdown.replace(/(?<!\n)\n(?!\n)/g, '  \n');
+    if (useRubyFilter) {
+      processedText = processedText.replace(/｜([^《]+)《([^》]+)》/g, '<ruby>$1<rt>$2</rt></ruby>');
+      const kanjiRange = '\\u4E00-\\u9FFF\\uF900-\\uFAFF\\u3400-\\u4DBF';
+      const kanjiRubyRegex = new RegExp(`([^｜|])([${kanjiRange}]+)《([^》\\n]+?)》`, 'gu');
+      processedText = processedText.replace(kanjiRubyRegex, '$1<ruby>$2<rt>$3</rt></ruby>');
+    }
+    // c) 処理後のテキストを、Pandocが最も得意なUTF-8として、一時ファイルに書き込む
+    await fsPromises.writeFile(tempMdPath, processedText, 'utf-8');
+
+    // --- [ステップ 2: Pandocで、単一の巨大なHTMLを生成] ---
+    const tempHtmlPath = join(tempDir, 'print_version.html');
+    let command = `"${pandocPath}" "${tempMdPath}" -f markdown-yaml_metadata_block+raw_html -o "${tempHtmlPath}" --standalone --embed-resources`;
+    command += ` --metadata lang=ja-JP`;
+    
+    // a) メタデータを追加
+    if (title) command += ` --metadata title="${title}"`;
+    if (author) command += ` --metadata author="${author}"`;
+    
+    // b) 向きに応じたCSSと、Notoフォントを埋め込むヘッダーを追加
+    const resourcesPath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+    const cssFileName = isVertical ? 'vertical.css' : 'horizontal.css';
+    const cssPath = join(resourcesPath, 'resources', 'styles', cssFileName);
+    if (existsSync(cssPath)) {
+      command += ` --css="${cssPath}"`;
+    }
+
+    const fontFileName = 'NotoSerifJP-VariableFont_wght.ttf';
+    const fontPath = join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'resources', 'fonts', fontFileName);
+    if (existsSync(fontPath)) {
+        const fontData = await fsPromises.readFile(fontPath, 'base64');
+        const fontFaceCss = `<style>@font-face { font-family: "Noto Serif JP"; src: url("data:font/ttf;base64,${fontData}"); }</style>`;
+        const tempHeaderPath = join(tempDir, 'header.html');
+        await fsPromises.writeFile(tempHeaderPath, fontFaceCss);
+        command += ` --include-in-header="${tempHeaderPath}"`;
+    }
+
+    await execPromise(command);
+    
+    // --- [ステップ 3: 生成されたHTMLを、最終フォーマットに変換] ---
+    if (format === 'html') {
+      await fsPromises.copyFile(tempHtmlPath, outputPath);
+    } else if (format === 'pdf') {
+      const printWindow = new BrowserWindow({ show: false });
+      try {
+        await printWindow.loadFile(tempHtmlPath);
+        const pdfData = await printWindow.webContents.printToPDF({ printBackground: true });
+        await fsPromises.writeFile(outputPath, pdfData);
+      } finally {
+        printWindow.close();
+      }
+    } else if (format === 'epub') {
+        // EPUBの場合は、Pandocで直接生成する方が高品質
+        let epubCommand = `"${pandocPath}" "${tempMdPath}" -f markdown+raw_html -o "${outputPath}" --standalone`;
+        epubCommand += ` --metadata lang=ja-JP`;
+      // メタデータ、表紙、縦書きCSSなどを追加
+      if (title) epubCommand += ` --metadata title="${title}"`;
+      if (author) epubCommand += ` --metadata author="${author}"`;
+      if (coverImagePath) epubCommand += ` --epub-cover-image="${coverImagePath}"`;
+      if (isVertical) {
+        const cssPath = join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'resources', 'styles', 'epubvertical.css');
+        if (existsSync(cssPath)) epubCommand += ` --css="${cssPath}"`;
+        epubCommand += ` --metadata "page-progression-direction:rtl"`;
+      }
+      
+      console.log(`[Export] Executing Pandoc for EPUB: ${epubCommand}`);
+        await execPromise(epubCommand);
+    }
+    
+    shell.showItemInFolder(outputPath);
+    return { success: true };
+
+  } catch (e: any) {
+    dialog.showErrorBox('エクスポート失敗', `処理中にエラーが発生しました。\n\n${e.stderr || e.message}`);
+    return { success: false, error: e.stderr || e.message };
+  }finally {
+    isExporting = false; 
+  }
+});
+
+ipcMain.handle('analyze-source-file', async (_event, filePath: string) => {
+  try {
+    // ★ 既存の、完璧なanalyzeFile関数を再利用する
+    const { content, ...meta } = await analyzeFile(filePath);
+    return meta; // contentは不要なので、encodingとeolだけを返す
+  } catch (e) {
+    return null;
+  }
+});
+
   // --- 設定 (ストア) ---
   ipcMain.handle('get-font-size', () => store.get('fontsize', 16));
   ipcMain.on('set-font-size', (_event, size: number) => store.set('fontsize', size));
@@ -765,6 +1380,89 @@ function setupIpcHandlers(): void {
       return []; 
     }
   });
+
+  ipcMain.handle('scan-system-fonts', async (_event, forceRescan: boolean = false) => {
+    // 1. キャッシュを優先して読み込む
+    if (!forceRescan && existsSync(fontCachePath)) {
+      try {
+        console.log('[FontManager] Loading fonts from cache...');
+        const cacheData = await fsPromises.readFile(fontCachePath, 'utf-8');
+        return JSON.parse(cacheData);
+      } catch (e) {
+        console.error('Failed to read font cache, rescanning.', e);
+      }
+    }
+
+    // 2. キャッシュがないか、強制再スキャンなら、スキャンを実行
+    const fontList = await scanSystemFontsInternal();
+    
+    // 3. スキャン結果をキャッシュに書き込む
+    try {
+      await fsPromises.writeFile(fontCachePath, JSON.stringify(fontList));
+    } catch (e) {
+      console.error('Failed to write font cache.', e);
+    }
+    
+    return fontList;
+  });
+
+  // 指定されたフォントパスのデータを、Base64で返す
+  ipcMain.handle('get-font-base64', async (_event, filePath: string) => {
+    try {
+      if (existsSync(filePath)) {
+        const buffer = await fsPromises.readFile(filePath);
+        return buffer.toString('base64');
+      }
+    } catch (e) {
+      console.error(`Failed to read font file for Base64 conversion: ${filePath}`, e);
+    }
+    return null;
+  });
+
+ipcMain.on('apply-font-to-main-window', (_event, fontData) => {
+  BrowserWindow.getAllWindows().forEach(win => {
+    // 設定ウィンドウ自身は除く
+    if (win !== settingsWindow) {
+      win.webContents.send('apply-system-font-from-settings', fontData);
+    }
+  });
+});
+
+ipcMain.on('apply-system-font', (_event, font: { path: string; family: string }) => {
+
+  // ★ メインウィンドウに、Base64とCSSファミリー名だけでなく、元のパスも送る
+  BrowserWindow.getAllWindows().forEach(win => {
+    if (win !== settingsWindow /* ... */) {
+      // getFontBase64をここで呼び出して、データを組み立てる
+      fsPromises.readFile(font.path, 'base64').then(base64 => {
+        const cssFontFamily = `system-font-${font.family.replace(/[\s]/g, '_')}`;
+        const format = extname(font.path).substring(1);
+        
+        win.webContents.send('apply-system-font-from-settings', { 
+          path: font.path, // ★ 元のパス
+          cssFontFamily, 
+          base64, 
+          format 
+        });
+      }).catch(e => console.error('Failed to read font for main window:', e));
+    }
+  });
+});
+
+  ipcMain.handle('get-applied-system-font-path', () => {
+    return store.get('appliedSystemFontPath');
+  });
+  ipcMain.handle('set-applied-system-font-path', async (_event, filePath: string | null) => {
+      store.set('appliedSystemFontPath', filePath);
+  });
+
+  // ★ サイクルフォントのインデックスをクリアするハンドラも追加
+  ipcMain.on('clear-font-index', () => {
+      store.set('fontIndex', 0); // または-1など、初期値にリセット
+  });  
+
+  ipcMain.on('toggle-settings-window', toggleSettingsWindow);
+  
   ipcMain.handle('get-bg-list', async () => {
     try {
       const targetPath = join(userDataPath, 'resources', 'background');
@@ -952,6 +1650,31 @@ ipcMain.on('request-bgm-play-pause', () => {
   BrowserWindow.getAllWindows().forEach(win => {
     win.webContents.send('trigger-bgm-play-pause');
   });
+});
+
+ipcMain.on('show-encoding-warning', (event, message: string) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (window) {
+    dialog.showMessageBox(window, {
+      type: 'warning',
+      title: 'エンコード警告',
+      message: message
+    });
+  }
+});
+
+ipcMain.handle('confirm-save-with-encoding-warning', async (event, fileName: string) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  const choice = await dialog.showMessageBox(window!, {
+    type: 'warning',
+    buttons: ['このまま保存', 'キャンセル'],
+    defaultId: 1,
+    cancelId: 1,
+    title: '保存の確認',
+    message: `ファイル "${fileName}" は、読み込み時にエンコードの問題が検出されました。`,
+    detail: 'このままUTF-8として保存すると、元のファイル形式が失われたり、文字化けした部分がそのまま保存される可能性があります。本当に保存しますか？',
+  });
+  return choice.response === 0; // 「このまま保存」が押されたらtrue
 });
 
   // --- マウス & タブサイクル ---

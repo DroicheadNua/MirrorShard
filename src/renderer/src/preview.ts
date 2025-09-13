@@ -36,11 +36,32 @@ const toggleSnow = () => {
 // ウィンドウが開かれたときに、メインプロセスから全ての初期化データを受け取る
 window.electronAPI.onInitializePreview(async (data) => {
   if (contentEl) {
-    // 1. フォントのセットアップ
-    // 必要なフォントの@font-faceルールを、このウィンドウの<head>に動的に生成する
-    const { availablefonts, currentFontName } = data.fontsInfo;
-    const styleEl = document.createElement('style');
-    styleEl.id = 'dynamic-font-styles';
+    const { fontsInfo } = data;
+
+    // 1. もし、mainからシステムフォントの情報が送られてきたら...
+    if (fontsInfo.isSystemFont) {
+      const { fontData } = fontsInfo;
+      console.log(`[Preview] Initializing with system font: ${fontData.cssFontFamily}`);
+      
+      // a. その情報を使って、@font-faceを生成し、適用する
+      //    (onApplySystemFontFromSettingsリスナーと全く同じロジック)
+      try {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'system-font-styles-preview';
+        const fontUrl = `data:font/${fontData.format};base64,${fontData.base64}`;
+        styleEl.textContent = `@font-face { font-family: '${fontData.cssFontFamily}'; src: url('${fontUrl}'); }`;
+        document.head.appendChild(styleEl);
+        await document.fonts.load(`16px "${fontData.cssFontFamily}"`);
+        contentEl.style.fontFamily = `'${fontData.cssFontFamily}', serif`;
+      } catch (e) { console.error('Failed to init with system font:', e); }
+
+    } else {
+      // 2. そうでなければ、これまで通りのサイクルフォントのロジックを実行
+      console.log(`[Preview] Initializing with cycle font: ${fontsInfo.currentFontName}`);
+      const { availablefonts, currentFontName } = fontsInfo;
+      const styleEl = document.createElement('style');
+      styleEl.id = 'dynamic-font-styles';
+
     styleEl.textContent = availablefonts.map((fontFile) => {
       const cssFontFamily = `my-editor-font-${fontFile.replace(/[^a-zA-Z0-9]/g, '-')}`;
       const fontUrl = `safe-resource://fonts/${fontFile}`;
@@ -89,7 +110,7 @@ window.electronAPI.onInitializePreview(async (data) => {
     }
   }
   }
-});
+}});
 
 // --- [エリア3: リアルタイム更新のリスナー] ---
 
@@ -113,8 +134,51 @@ window.electronAPI.onUpdatePreview((data) => {
     }
 });
 
-// メインウィンドウでのフォントファミリー変更に追従
+// ★★★ 設定画面からのシステムフォント適用命令を受け取るリスナー ★★★
+window.electronAPI.onApplySystemFontFromSettings(async (fontData) => {
+  // fontDataには { cssFontFamily, base64, format } が含まれている
+  const { cssFontFamily, base64, format } = fontData;
+  console.log(`[Preview] Applying system font from settings: ${cssFontFamily}`);
+  
+  try {
+    // 1. このプレビューウィンドウのdocumentに、@font-faceルールを生成
+    //    IDを変えておくことで、メインウィンドウのスタイルと衝突しない
+    const styleEl = document.getElementById('system-font-styles-preview') || document.createElement('style');
+    styleEl.id = 'system-font-styles-preview';
+    
+    const mimeType = `font/${format}`;
+    const fontUrl = `data:${mimeType};base64,${base64}`;
+    const formatHint = format === 'ttf' ? 'truetype' : (format === 'otf' ? 'opentype' : format);
+
+    styleEl.textContent = `
+      @font-face {
+        font-family: '${cssFontFamily}';
+        src: url('${fontUrl}') format('${formatHint}');
+      }
+    `;
+    document.head.appendChild(styleEl);
+    
+    // 2. フォントのロードが完了するのを待つ
+    await document.fonts.load(`16px "${cssFontFamily}"`);
+    
+    // 3. プレビューの#content要素に、新しいフォントを適用する
+    const contentEl = document.getElementById('content');
+    if (contentEl) {
+      contentEl.style.fontFamily = `'${cssFontFamily}', serif`;
+    }
+    console.log('[Preview] System font applied successfully.');
+
+  } catch(e) {
+    console.error('Failed to apply system font in preview:', e);
+  }
+});
+
+
+// ★★★ サイクルフォントの変更を同期するリスナーも、念のため確認 ★★★
+// (SnowEditorのコードから、このリスナーがあるはずです)
 window.electronAPI.onPreviewFontChange((fontName) => {
+  console.log(`[Preview] Applying cycle font: ${fontName}`);
+  const contentEl = document.getElementById('content');
   if (contentEl) {
     contentEl.style.fontFamily = `'${fontName}', serif`;
   }

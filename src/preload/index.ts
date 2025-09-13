@@ -105,9 +105,9 @@ onTriggerSaveFile: (callback) => {
   getFontIndex: () => ipcRenderer.invoke('get-font-index'),
   setFontIndex: (index) => ipcRenderer.send('set-font-index', index),
 
-  // ★★★ onInitializePreviewの実装 ★★★
   onInitializePreview: (callback) => {
-    const handler = (_event, data: any) => callback(data);
+    // ★ mainから送られてくるdataを、正しい型として解釈する
+    const handler = (_event, data: any) => callback(data as any);
     ipcRenderer.on('initialize-preview', handler);
     return () => ipcRenderer.removeListener('initialize-preview', handler);
   },
@@ -236,9 +236,44 @@ onTriggerSaveFile: (callback) => {
   requestGlobalFontCycle: () => ipcRenderer.send('request-font-cycle'),  
   requestGlobalBgmCycle: () => ipcRenderer.send('request-bgm-cycle'),
   requestGlobalBgmPlayPause: () => ipcRenderer.send('request-bgm-play-pause'),
+  scanSystemFonts: (force) => ipcRenderer.invoke('scan-system-fonts', force),
+  getFontBase64: (filePath) => ipcRenderer.invoke('get-font-base64', filePath),
+  applyFontToMainWindow: (fontData) => ipcRenderer.send('apply-font-to-main-window', fontData),  
+  onApplySystemFontFromSettings: (callback) => {
+    const handler = (_event, fontData) => callback(fontData);
+    ipcRenderer.on('apply-system-font-from-settings', handler);
+    return () => ipcRenderer.removeListener('apply-system-font-from-settings', handler);
+  },  
+  toggleSettingsWindow: () => ipcRenderer.send('toggle-settings-window'),
+
+  getAppliedSystemFontPath: () => ipcRenderer.invoke('get-applied-system-font-path'),
+  setAppliedSystemFontPath: (filePath) => ipcRenderer.invoke('set-applied-system-font-path', filePath),
+  clearFontIndex: () => ipcRenderer.send('clear-font-index'),  
+  closeSettingsWindow: () => ipcRenderer.send('close-settings-window'),
+  selectImageDialog: () => ipcRenderer.invoke('select-image-dialog'),
+  runExport: (options) => ipcRenderer.invoke('run-export', options),  
+    onRequestExportWindow: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('request-export-window', handler);
+    return () => {
+      ipcRenderer.removeListener('request-export-window', handler);
+    };
+  },
+    getPandocPath: () => ipcRenderer.invoke('get-pandoc-path'),
+    setPandocPath: (path) => ipcRenderer.send('set-pandoc-path', path),
+    openExternalLink: (url) => ipcRenderer.send('open-external-link', url),  
+    selectFileDialog: (options) => ipcRenderer.invoke('select-file-dialog', options),
+    openExportWindow: (filePath) => ipcRenderer.send('open-export-window', filePath),
+    getTargetFilePath: () => ipcRenderer.invoke('get-target-file-path'),
+    closeExportWindow: () => ipcRenderer.send('close-export-window'),    
+    setExportBusyState: (isBusy) => ipcRenderer.send('set-export-busy-state', isBusy),
+    showEncodingWarningDialog: (message) => ipcRenderer.send('show-encoding-warning', message),
+    confirmSaveWithEncodingWarning: (fileName) => ipcRenderer.invoke('confirm-save-with-encoding-warning', fileName),
+    analyzeSourceFile: (filePath) => ipcRenderer.invoke('analyze-source-file', filePath),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)
+
 // ★★★ マウスの「戻る/進む」ボタンイベントを直接リッスン ★★★
 window.addEventListener('mouseup', (event) => {
   if (event.button === 3 || event.button === 4) {

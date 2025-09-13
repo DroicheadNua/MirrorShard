@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Advanced Settings</title>
+  <link rel="stylesheet" href="./src/assets/settings.css">
+</head>
+<body>
+  <div id="window-controls">
+    <button id="close-settings-btn" title="Close (Esc)">×</button>
+  </div>
+  
+  <h1>Advanced Settings</h1>
+  
+  <section id="font-settings">
+    <h2>System Fonts</h2>
+    <p>PCにインストールされているフォントをエディタに適用します。</p>
+    <button id="scan-fonts-btn">Scan System Fonts</button>
+    <select id="system-font-selector" disabled></select>
+    <button id="apply-font-btn" disabled>Apply Font</button>
+    <p id="current-font-display">Current Font: Loading...</p>
+    <p id="font-scan-status"></p>
+  </section>
+<hr>
+
+<section id="external-tools-settings">
+  <h2>External Tools</h2>
+  
+  <div class="form-group">
+    <label for="pandoc-path-input">Pandoc Path:</label>
+    <div class="file-input-wrapper">
+      <input type="text" id="pandoc-path-input" placeholder="pandoc">
+      <button id="select-pandoc-btn">Select...</button>
+    </div>
+    <p class="description">
+      EpubやPDFへのエクスポートに必要です。
+      <a href="#" id="pandoc-link">インストールはこちら</a>
+    </p>
+  </div>
+</section>
+  
+  <script type="module" src="./src/settings.ts"></script>
+</body>
+</html>
