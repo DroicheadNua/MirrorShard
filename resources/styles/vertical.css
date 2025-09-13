@@ -1,0 +1,40 @@
+/* resources/styles/vertical.css */
+@charset "UTF-8";
+
+/* 印刷時の用紙設定 */
+@page {
+  size: A4 landscape;
+  margin: 25mm;
+}
+
+html {
+  writing-mode: vertical-rl;
+  -webkit-writing-mode: vertical-rl;
+}
+
+body {
+  /* ★ 埋め込まれたNoto Serif JPを参照 */
+  font-family: "Noto Serif JP", serif;
+  font-size: 12pt; /* pt単位が印刷には適している */
+  
+  /* 1行の長さを約40字に (A4横の高さと相談) */
+  height: 160mm; /* A4横の短辺210mm - マージン50mm = 160mm */
+  
+  /* 複数段組にする場合は、column-countを使う */
+  /* column-count: 2;
+  column-gap: 1.5em; */
+  word-break: break-all;
+  outline:none;
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
+
+
+/* ★★★ HTMLで表示したときだけ、中央揃えにする ★★★ */
+@media screen {
+  body {
+  margin-top: 10%;
+  }
+}

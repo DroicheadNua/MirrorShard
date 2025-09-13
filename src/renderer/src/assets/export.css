@@ -1,0 +1,30 @@
+/* export.css */
+body {
+  background-color: #eec595;
+  color: #3d352a;
+  font-family: serif-ja, serif;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-app-region: drag; 
+}
+.container { padding: 1em 2em; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1em; }
+h1 { margin: 0; font-size: 1.5em;}
+button { -webkit-app-region: no-drag; }
+
+.form-group { 
+    margin-bottom: 1.2em; 
+    font-family: serif-ja, serif;
+    -webkit-app-region:no-drag;
+}
+label, .source-info { font-size: 0.9em; font-weight: bold; display: block; margin-bottom: 0.5em; }
+input[type="text"], select { width: 100%; padding: 8px; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc; }
+.file-input-wrapper { display: flex; }
+#cover-image-path { flex-grow: 1; }
+.checkbox-group { display: flex; align-items: center; margin-bottom: 0.3em; }
+.checkbox-group input { margin-right: 0.5em; }
+.actions { text-align: right; margin-top: 1.5em; }
+#run-export-btn { font-weight: bold; padding: 10px 20px; }
+#status-message { font-size: 0.8em; text-align: right; min-height: 1em; }
+#epub-options-wrapper.hidden { display: none; }

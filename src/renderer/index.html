@@ -28,6 +28,8 @@
           <button id="typesound-toggle-btn" title="タイプ音 ON/OFF (Cmd/Ctrl+Shift+T)">🎤</button>
         </div>       
         <div class="window-controls zen-hide">
+          <button id="export-btn" title="エクスポート(Ctrl+E)">🖨️</button>
+          <button id="settings-btn" title="高度な設定 (F2)">⚙️</button>
           <button id="open-resources-btn" title="素材フォルダを開く(Ctrl+Shift+J)">R</button>
           <button id="focus-mode-btn" title="半透明ウィンドウ(Cmd/Ctrl+Shift+W)">📷️</button>
           <button id="preview-btn" title="縦書きプレビュー (Ctrl+P)">📖</button>
@@ -43,10 +45,13 @@
     <div id="main-content">
 
       <div id="status-bar" class="zen-hide">
-        <span id="status-stats">1L 1C</span>
-        <span id="status-encoding">UTF-8</span>
-        <span id="status-eol">LF</span>
-        <span id="status-time">22:41</span>
+        <span id="status-breadcrumbs"></span>        
+        <div class="status-right">        
+          <span id="status-stats">1L 1C</span>
+          <span id="status-encoding">UTF-8</span>
+          <span id="status-eol">LF</span>
+          <span id="status-time">22:41</span>
+        </div>
       </div>
       
       <!-- 左側のアウトラインパネル -->

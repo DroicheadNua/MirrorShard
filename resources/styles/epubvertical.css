@@ -1,0 +1,10 @@
+@charset "UTF-8";
+html {
+  writing-mode: vertical-rl;
+  -webkit-writing-mode: vertical-rl;
+
+}
+body {
+  font-family: serif-ja, serif;
+  font-size: 1rem; /* ptやpxより、相対的なremがEPUBには適している */
+}

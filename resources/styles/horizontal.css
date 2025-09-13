@@ -1,0 +1,26 @@
+/* resources/styles/horizontal.css */
+@charset "UTF-8";
+
+/* 印刷時の用紙設定 */
+@page {
+  size: A4 portrait; /* ★ 用紙を縦向き (portrait) に */
+  margin: 25mm;
+}
+
+body {
+  /* ★ 埋め込まれたNoto Serif JPを参照 */
+  font-family: "Noto Serif JP", serif;
+  font-size: 11pt; /* 横書きなので少し小さめに */
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+/* ★★★ HTMLで表示したときだけ、マージンを追加 ★★★ */
+@media screen {
+  body {
+    padding-top: 5%;
+    padding-left: 5%;
+    padding-right: 5%;
+    box-sizing: border-box;
+  }
+}

@@ -21,6 +21,7 @@ interface ProjectFile {
   isDirty: boolean;
   encoding: string;
   eol: 'LF' | 'CRLF';
+  encodingWarning?: string; 
 }
 interface AppState {
   projectFiles: ProjectFile[];
@@ -283,6 +284,7 @@ const createNewState = (doc: string): EditorState => {
                     if (rafId) cancelAnimationFrame(rafId);
                     rafId = requestAnimationFrame(() => {
                         updateOutlineHighlight(update.view);
+                        updateBreadcrumbs(update.view);
                         rafId = 0;
                     });
                 }
@@ -309,12 +311,92 @@ const createNewState = (doc: string): EditorState => {
 
 // --- [エリア 4: アクション関数 (Stateを変更する唯一の場所)] ---
 
+/**
+ * 現在のカーソル位置から、見出しの階層情報（パンくずリスト）を生成する
+ */
+const updateBreadcrumbs = (view: EditorView) => {
+  const breadcrumbsEl = document.getElementById('status-breadcrumbs');
+  if (!breadcrumbsEl) return;
+
+  const pos = view.state.selection.main.head;
+  const currentLineNumber = view.state.doc.lineAt(pos).number;
+  const doc = view.state.doc;
+
+  const path: string[] = [];
+  let lastFoundLevel = 0;
+
+  // カーソル行から、ドキュメントの先頭に向かって一行ずつスキャン
+  for (let i = currentLineNumber; i >= 1; i--) {
+    const line = doc.line(i);
+    const match = line.text.match(/^(#+)\s+(.*)/);
+
+    if (match) {
+      const level = match[1].length;
+      const title = match[2].trim();
+
+      // より上位（または同じレベル）の見出しが見つかったら、それをパスに追加
+      if (level < lastFoundLevel || lastFoundLevel === 0) {
+        path.unshift(title); // 配列の先頭に追加
+        lastFoundLevel = level;
+      }
+      // 最上位の見出し(#)を見つけたら、スキャンを終了
+      if (level === 1) {
+        break;
+      }
+    }
+  }
+  
+  // 生成されたパスを、' > ' で繋いで表示
+  breadcrumbsEl.textContent = path.join(' > ');
+};
+
+/**
+ * 指定されたファイルパスまたはBase64データからフォントを生成し、エディタに適用する
+ * @param data - ファイルパスか、Base64データを含むオブジェクト
+ */
+async function applyFont(data: { path?: string; cssFontFamily?: string; base64?: string; format?: string }) {
+  let { path, cssFontFamily, format } = data;
+  let base64: string | null = data.base64 || null;
+
+  try {
+    // もしパスしか渡されなければ、Base64データをmainから取得
+    if (path && !base64) {
+      base64 = await window.electronAPI.getFontBase64(path);
+      if (!base64) throw new Error('Base64 data is null');
+      const family = path.split(/[\\/]/).pop()?.split('.').slice(0, -1).join('.') || 'system-font';
+      cssFontFamily = `system-font-${family.replace(/[\s]/g, '_')}`;
+      format = path.split('.').pop()?.toLowerCase() || 'truetype';
+    }
+    
+    if (!cssFontFamily || !base64 || !format) throw new Error('Insufficient font data');
+
+    // @font-faceを生成・適用
+    const styleEl = document.getElementById('system-font-styles') || document.createElement('style');
+    styleEl.id = 'system-font-styles';
+    const fontUrl = `data:font/${format};base64,${base64}`;
+    styleEl.textContent = `
+      @font-face { font-family: '${cssFontFamily}'; src: url('${fontUrl}'); }
+    `;
+    document.head.appendChild(styleEl);
+    
+    await document.fonts.load(`16px "${cssFontFamily}"`);
+    
+    // CodeMirrorに適用
+    const newFontTheme = createFontTheme(cssFontFamily);
+    view.dispatch({ effects: fontFamily.reconfigure(newFontTheme) });
+    document.documentElement.style.setProperty('--current-editor-font', cssFontFamily);
+
+  } catch (e) { console.error(`Failed to apply font:`, e); }
+}
+
+
 /** UIの再描画を行う */
 const updateUI = () => {
   if (!view) return;
   const position = view.state.selection.main.head;
   const lineNumber = view.state.doc.lineAt(position).number;
   updateOutline(lineNumber);
+  updateBreadcrumbs(view)
   updateStatusBar();
 };
 
@@ -329,7 +411,23 @@ const switchFile = (fileId: string | null) => {
 
     state.activeFileId = fileId;
     const activeFile = state.projectFiles.find(f => f.id === fileId);
+
+    //  2. ステータスバーを、"新しい"アクティブファイルの"正しい"情報で更新する 
+    updateStatusBar();
     
+    const encodingEl = document.getElementById('status-encoding');
+    const eolEl = document.getElementById('status-eol');
+    if (encodingEl && eolEl) {
+        if (activeFile) {
+            // ★ activeFile.encoding は、analyzeFileが返した正しい値を持っている
+            encodingEl.textContent = activeFile.encoding;
+            eolEl.textContent = activeFile.eol;
+        } else {
+            encodingEl.textContent = '-';
+            eolEl.textContent = '-';
+        }
+    }    
+
     if (activeFile) {
         // 3. アウトラインの状態を初期化
         if (!outlineCollapsedState.has(activeFile.id)) {
@@ -393,6 +491,7 @@ const addNewFile = () => {
     isDirty: false,
     encoding: 'utf8',
     eol: 'LF',
+    encodingWarning: undefined,
   };
   state.projectFiles.push(newFile);
   switchFile(newFile.id);
@@ -407,6 +506,9 @@ const openFileAction = async () => {
   const result = await window.electronAPI.openFile();
   if (result) {
     const existingFile = state.projectFiles.find(f => f.filePath === result.filePath);
+  if (result.warning) {
+    window.electronAPI.showEncodingWarningDialog(result.warning);
+  }    
     if (existingFile) {
       switchFile(existingFile.id);
       return;
@@ -420,6 +522,7 @@ const openFileAction = async () => {
       isDirty: false,
       encoding: result.encoding,
       eol: result.eol,
+      encodingWarning: result.warning,
     };
     state.projectFiles.push(newFile);
     switchFile(newFile.id);
@@ -441,6 +544,9 @@ const openFileAndSwitch = async (filePath: string) => {
         window.electronAPI.addToHistory(filePath);
         const result = await window.electronAPI.readFile(filePath);
         if (result) {
+            if (result.warning) {
+              window.electronAPI.showEncodingWarningDialog(result.warning);
+            }          
             const title = filePath.split(/[\\/]/).pop() || 'Untitled';
             const newFile: ProjectFile = {
                 id: crypto.randomUUID(),
@@ -450,6 +556,7 @@ const openFileAndSwitch = async (filePath: string) => {
                 isDirty: false,
                 encoding: result.encoding,
                 eol: result.eol,
+                encodingWarning: result.warning,
             };
             state.projectFiles.push(newFile);
             switchFile(newFile.id);
@@ -484,15 +591,36 @@ const openFileInBackground = async (filePath: string) => {
 const saveFileAction = async (forceDialog: boolean = false) => {
     const activeFile = state.projectFiles.find(f => f.id === state.activeFileId);
     if (!activeFile) return;
+  if (activeFile.encodingWarning) {
+    const confirmed = await window.electronAPI.confirmSaveWithEncodingWarning(activeFile.title);
+    if (!confirmed) {
+      return; // ユーザーがキャンセルしたら、保存しない
+    }
+  }
     const content = view.state.doc.toString();
     const filePath = forceDialog ? null : activeFile.filePath;
-    const savedPath = await window.electronAPI.saveFile(filePath, content, { encoding: activeFile.encoding, eol: activeFile.eol });
-    if (savedPath) {
-        activeFile.filePath = savedPath;
-        activeFile.title = savedPath.split(/[\\/]/).pop() || 'Untitled';
+    const options = { encoding: activeFile.encoding, eol: activeFile.eol };
+
+    // ★★★ ログ1: 送信するデータを表示 ★★★
+    console.log('[Renderer] Sending save request with options:', options);
+
+    const result = await window.electronAPI.saveFile(filePath, content, options);
+
+    if (result.success && result.path) {
+        // --- 成功した場合 ---
+        activeFile.filePath = result.path;
+        activeFile.title = result.path.split(/[\\/]/).pop() || 'Untitled';
         activeFile.isDirty = false;
         activeFile.state = view.state;
         updateUI();
+    } else if (result.cancelled) {
+        // --- ユーザーがキャンセルした場合 ---
+        console.log('[Save] Save action was cancelled by the user.');
+        // 何もせず、静かに処理を終了する
+    } else {
+        // --- 予期せぬエラーで失敗した場合 ---
+        console.error(`[Save] Save action failed: ${result.error}`);
+        // ここでユーザーに「保存に失敗しました」とアラートを出しても良い
     }
 };
 
@@ -585,14 +713,15 @@ const updatePreview = () => {
 const updateStatusBar = () => {
     const encodingEl = document.getElementById('status-encoding');
     const eolEl = document.getElementById('status-eol');
-    const statsEl = document.getElementById('status-stats'); // ★
+    const statsEl = document.getElementById('status-stats'); 
     if (!encodingEl || !eolEl || !statsEl) return;
     
     const activeFile = state.projectFiles.find(f => f.id === state.activeFileId);
     if (activeFile && view) { // ★ viewが存在することも確認
         // エンコーディングと改行コード
-        encodingEl.textContent = activeFile.encoding.toUpperCase();
-        eolEl.textContent = activeFile.eol;
+        //    activeFile.encoding が string であることを保証する
+        encodingEl.textContent = typeof activeFile.encoding === 'string' ? activeFile.encoding.toUpperCase() : 'UNKNOWN';
+        eolEl.textContent = activeFile.eol || '-';
 
         // ★★★ 統計情報の計算と表示 ★★★
         const doc = view.state.doc;
@@ -793,11 +922,25 @@ const applyTheme = (isDarkMode: boolean) => {
   }
 };
 
-const cycleFont = async () => {
+const cycleFont = async (targetIndex?: number) => {
+    // 1. もし、現在システムフォントが適用されているなら、まずそれを解除する
+    //    `getAppliedSystemFontPath`はmainに問い合わせるので、asyncにする
+    const appliedSystemFontPath = await window.electronAPI.getAppliedSystemFontPath();
+    if (appliedSystemFontPath) {
+        console.log('[FontManager] System font override detected. Clearing it.');
+        // a. ストアからシステムフォントの設定を削除するよう、mainにお願いする
+        await window.electronAPI.setAppliedSystemFontPath(null);
+        // b. サイクルフォントのインデックスをリセットする
+        currentFontIndex = -1; // -1にしておけば、次の行の+1でインデックス0から始まる
+    }  
+
   if (availablefonts.length === 0) return;
 
   // インデックスを更新
-  currentFontIndex = (currentFontIndex + 1) % availablefonts.length;
+  // targetIndexが指定されていればそれに、なければ次のインデックスに
+    currentFontIndex = (targetIndex !== undefined)
+        ? targetIndex
+        : (currentFontIndex + 1) % availablefonts.length;
   const nextFontFile = availablefonts[currentFontIndex]; // 変数名を 'nextFontFile' に変更
   
   // ★★★ ここが修正ポイント ★★★
@@ -1104,6 +1247,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         if (rafId) cancelAnimationFrame(rafId);
                         rafId = requestAnimationFrame(() => {
                             updateOutlineHighlight(update.view);
+                            updateBreadcrumbs(update.view);
                             rafId = 0;
                         });
                     }
@@ -1155,6 +1299,8 @@ async function initializeApp() {
     const bgmPlayPauseBtn = document.getElementById('bgm-play-pause-btn');
     const typeSoundToggleBtn = document.getElementById('typesound-toggle-btn');
     const timeEl = document.getElementById('status-time');
+    const settingsBtn = document.getElementById('settings-btn');
+    const exportBtn = document.getElementById('export-btn');
 
     if (!outlineContainer || !collapseAllBtn /* ... */) {
         console.error("Initialization failed: UI elements are missing.");
@@ -1176,6 +1322,9 @@ async function initializeApp() {
       setZenMode(!isZenMode); 
     });
     focusModeBtn?.addEventListener('click', toggleFocusMode);
+    settingsBtn?.addEventListener('click', () => {
+      window.electronAPI.toggleSettingsWindow(); 
+    });    
     bgmCycleBtn?.addEventListener('click', cyclebgm);
     bgmPlayPauseBtn?.addEventListener('click', togglePlayPausebgm);
     typeSoundToggleBtn?.addEventListener('click', toggleTypeSound);
@@ -1189,6 +1338,15 @@ async function initializeApp() {
     darkModeBtn?.addEventListener('click', () => {
     window.electronAPI.toggleDarkMode(); 
   });
+exportBtn?.addEventListener('click', () => {
+  const activeFile = state.projectFiles.find(f => f.id === state.activeFileId);
+  if (activeFile?.filePath) {
+    window.electronAPI.openExportWindow(activeFile.filePath); 
+  } else {
+    alert('ファイルを一度保存してください。');
+  }
+});
+
     mainContent?.addEventListener('contextmenu', (event) => {
       // 1. イベントの発生源が、エディタかその子孫であるかをチェック
       const editorRootEl = view.dom;
@@ -1325,6 +1483,16 @@ async function initializeApp() {
   window.electronAPI.onCycleTab((direction) => {
     cycleTab(direction);
   });
+  window.electronAPI.onApplySystemFontFromSettings(async (fontData) => {
+    console.log(`[Renderer] Applying system font from settings: ${fontData.cssFontFamily}`);
+    // ★ 共通関数を呼び出すだけ
+    await applyFont(fontData); 
+  });
+  window.electronAPI.onRequestExportWindow(() => {
+  const exportBtn = document.getElementById('export-btn');
+  exportBtn?.click(); // 既存のボタンのクリックイベントをプログラムから発火させる
+});
+
 
   if (timeEl) {
     // 最初に一度時刻を設定
@@ -1338,14 +1506,28 @@ async function initializeApp() {
   }
 
     // 非同期の状態初期化
+
+  // ★★★ まず、サイクル用のフォントリストを"必ず"読み込んでおく ★★★
+  availablefonts = await window.electronAPI.getFontList();    
+  // ★★★ 1. まず、保存されたシステムフォントがあるかチェック ★★★
+  const appliedSystemFontPath = await window.electronAPI.getAppliedSystemFontPath();
+  let fontInitializedBySystemFont = false;
+
+  if (appliedSystemFontPath) {
+    console.log(`[Init] Applying saved system font: ${appliedSystemFontPath}`);
+    await applyFont({ path: appliedSystemFontPath }); 
+    fontInitializedBySystemFont = true;
+  }
+  
+  // ★ 2. なければ、通常のサイクルフォントを初期化
+  //    (availablefontsは既に読み込み済み)
+  if (!fontInitializedBySystemFont && availablefonts.length > 0) {
+    currentFontIndex = (await window.electronAPI.getFontIndex() || 0) - 1;
+    await cycleFont();
+  }
+
     const isDarkMode = await window.electronAPI.getDarkModeState();
     applyTheme(isDarkMode);
-    
-    availablefonts = await window.electronAPI.getFontList();
-    if (availablefonts.length > 0) {
-        currentFontIndex = (await window.electronAPI.getFontIndex() || 0) - 1;
-        await cycleFont();
-    }
     
   isFocusMode = await window.electronAPI.getFocusModeState();
   if (isFocusMode) {

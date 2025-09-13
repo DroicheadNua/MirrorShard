@@ -373,6 +373,23 @@ body.dark-mode .monaco-editor.drag-over {
 #status-bar span {
   margin-left: 1em;
 }
+#status-bar {
+  display: flex;
+  justify-content: space-between; /* 両端揃え */
+  align-items: center;
+  /* ... */
+}
+#status-breadcrumbs {
+  /* ... (左寄せ用のスタイル) */
+  font-size: 0.9em;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status-right {
+  display: flex;
+}
 
 /* 検索パネル全体 */
 .cm-panel.cm-search {

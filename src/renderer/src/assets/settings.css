@@ -1,0 +1,36 @@
+html, body {
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  background-color: rgb(255, 250, 220); 
+  color: #333333;
+  font-family:  serif; 
+  font-size: 14px;
+  -webkit-app-region: drag; 
+}
+
+#font-settings, #external-tools-settings {
+    -webkit-app-region:no-drag;
+}
+
+#window-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  padding: 5px;
+  -webkit-app-region: no-drag; /* ドラッグ領域ではないことを明示 */
+}
+
+#close-settings-btn {
+  width: 24px;
+  height: 24px;
+  border:none;
+  background-color: transparent;
+  border-radius: 50%; 
+  font-size: 14px;
+  cursor: pointer;
+}
+
+#close-settings-btn:hover {
+  background-color: #e0e0e0;
+}

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Export Document</title>
+  <link rel="stylesheet" href="../renderer/src/assets/export.css">
+</head>
+<body>
+  <div class="container">
+    <div class="modal-header">
+      <h1>Export Document</h1>
+      <button id="close-export-btn" title="Cancel">×</button>
+    </div>
+    
+    <p class="source-info">
+      <strong>Exporting File:</strong> <span id="source-file-display">Loading...</span>
+    </p>
+    
+    <section class="form-group">
+      <label for="format-select">出力形式:</label>
+      <select id="format-select">
+        <option value="epub" selected>EPUB</option>
+        <option value="pdf">PDF</option>
+        <option value="html">HTML</option>
+      </select>
+    </section>
+    
+    <!-- EPUB専用オプション -->
+    <div id="epub-options-wrapper">
+      <section class="form-group">
+        <label for="title-input">書名:</label>
+        <input type="text" id="title-input">
+      </section>
+      <section class="form-group">
+        <label for="author-input">著者名:</label>
+        <input type="text" id="author-input">
+      </section>
+      <section class="form-group">
+        <label for="cover-image-input">表紙画像:</label>
+        <div class="file-input-wrapper">
+          <input type="text" id="cover-image-path" readonly placeholder="No image selected">
+          <button id="select-cover-btn">Select...</button>
+        </div>
+      </section>
+    </div>
+    
+    <section class="form-group">
+      <label>オプション:</label>
+      <div class="checkbox-group">
+        <input type="checkbox" id="vertical-check" checked>
+        <label for="vertical-check">縦書きにする</label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="ruby-check" checked>
+        <label for="ruby-check">ルビを変換する</label>
+      </div>
+    </section>
+    
+    <div class="actions">
+      <button id="run-export-btn">Export as EPUB</button>
+    </div>
+    
+    <p id="status-message"></p>
+  </div>
+  <script type="module" src="./src/export.ts"></script>
+</body>
+</html>
