@@ -9,7 +9,7 @@ import { search, searchKeymap } from '@codemirror/search';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
-import { TYPE_SOUND_BASE64 } from './type-sound';
+import { TYPE_SOUND_BASE64 } from './scripts/type-sound';
 import type { SelectionRange, StateEffect } from '@codemirror/state';
 
 // --- [エリア 2: 型定義] ---
@@ -990,13 +990,16 @@ const cycleFont = async (targetIndex?: number) => {
   }
 };
 const cyclebg = () => {
+  window.electronAPI.setCustomPath({ type: 'background', path: null });
   if (availablebgs.length === 0) return;
-  document.body.classList.remove(`bg-index-${currentbgIndex}`);
+  document.body.classList.remove(`bg-index-${currentbgIndex}`);  
   currentbgIndex = (currentbgIndex + 1) % availablebgs.length;
   document.body.classList.add(`bg-index-${currentbgIndex}`);
   window.electronAPI.setbgIndex(currentbgIndex);
+  document.body.style.removeProperty('background-image'); 
 };
 const cyclebgm = async () => {
+  window.electronAPI.setCustomPath({ type: 'bgm', path: null });
   if (availablebgms.length === 0) return;
   currentbgmIndex = (currentbgmIndex + 1) % availablebgms.length;
   const bgmFile = availablebgms[currentbgmIndex];
@@ -1488,6 +1491,53 @@ exportBtn?.addEventListener('click', () => {
     // ★ 共通関数を呼び出すだけ
     await applyFont(fontData); 
   });
+
+
+
+// ★★★ settingsウィンドウからの、直接のメッセージを受け取る ★★★
+window.interop.onMainMessage('revert-to-cycle-bgm', () => {
+  console.log('[Renderer] Reverting to cycle BGM...');
+  cyclebgm();
+});
+
+// ★ settingsウィンドウからの「サイクルに戻して」というメッセージを受け取る
+window.interop.onMainMessage('revert-to-cycle-bg', () => {
+  console.log('[Renderer] Reverting to cycle background...');  
+  // ★★★ 1. 強力なインラインスタイルを、"完全に削除"する ★★★
+  document.body.style.removeProperty('background-image');  
+  // ★★★ 2. サイクル機能を、改めて呼び出す ★★★
+  //    (これにより、正しい.bg-index-Nクラスが、再びbodyに適用される)
+  cyclebg();
+});
+
+window.interop.onMainMessage('apply-custom-bgm', async (filePath) => {
+  console.log('[Renderer] Applying custom BGM from path:', filePath);
+  // ★ 既存の、安全なdata:URL生成ロジックをここで実行
+  const dataUrl = await window.electronAPI.getBgmDataUrl(filePath);
+  if (dataUrl) {
+    audioEl.src = dataUrl;
+    audioEl.play().catch(() => {});
+    document.getElementById('bgm-play-pause-btn')!.textContent = '❚❚';
+    window.electronAPI.setbgmPausedState(false);
+  }
+});
+
+window.interop.onMainMessage('apply-custom-background', async (filePath) => {
+  console.log('[Renderer] Applying custom background from path:', filePath);
+  
+  // 1. まず、既存のサイクル用クラスをすべて削除
+  document.body.className = document.body.className.replace(/\s?bg-index-\d+/g, '');
+
+  // 2. mainに、data: URLを要求する
+  const dataUrl = await window.electronAPI.getBackgroundDataUrl(filePath);
+  
+  if (dataUrl) {
+    // 3. ★★★ インラインスタイルで、背景画像を"直接"上書きする ★★★
+    document.body.style.backgroundImage = `url('${dataUrl}')`;
+  }
+});
+
+
   window.electronAPI.onRequestExportWindow(() => {
   const exportBtn = document.getElementById('export-btn');
   exportBtn?.click(); // 既存のボタンのクリックイベントをプログラムから発火させる
@@ -1540,37 +1590,54 @@ exportBtn?.addEventListener('click', () => {
     setZenMode(true); 
   }
 
-// a. 背景画像のリストを取得
-availablebgs = await window.electronAPI.getbgList();
-if (availablebgs.length > 0) {
-  // b. @font-faceと同じ要領で、背景画像用の<style>タグを生成
-  const bgStyleEl = document.createElement('style');
-  bgStyleEl.id = 'dynamic-background-styles';
-  bgStyleEl.textContent = availablebgs.map((bgFile, index) => {
-    // safe-resourceプロトコルで、安全にローカルファイルを参照
-    const bgUrl = `safe-resource://background/${encodeURIComponent(bgFile)}`;
-    // body.bg-index-N というクラスが適用されたときのスタイルを定義
-    return `
-      body.bg-index-${index} {
-        background-image: url('${bgUrl}');
-      }
-    `;
-  }).join('\n');
-  document.head.appendChild(bgStyleEl);
-  
-  // c. 保存されたインデックスを読み込み、最初の背景を適用
-  const savedbgIndex = await window.electronAPI.getbgIndex();
-  currentbgIndex = savedbgIndex ?? 0;
+// ★背景とBGMの初期化  
+//  1. まず、ストアに保存されたカスタムパスがあるか確認
+  const customPaths = await window.electronAPI.getCustomPaths();
+
+// 2. 背景の初期化
+// a) サイクル機能はどちらにせよ初期化（これをしないとサイクル機能が機能しない）
+  console.log('[Init] Initializing cycle backgrounds...');
+  availablebgs = await window.electronAPI.getbgList();
+  if (availablebgs.length > 0) {
+    // b. @font-faceと同じ要領で、背景画像用の<style>タグを生成
+    const bgStyleEl = document.createElement('style');
+    bgStyleEl.id = 'dynamic-background-styles';
+    bgStyleEl.textContent = availablebgs.map((bgFile, index) => {
+      // safe-resourceプロトコルで、安全にローカルファイルを参照
+      const bgUrl = `safe-resource://background/${encodeURIComponent(bgFile)}`;
+      // body.bg-index-N というクラスが適用されたときのスタイルを定義
+      return `
+        body.bg-index-${index} {
+          background-image: url('${bgUrl}');
+        }
+      `;
+    }).join('\n');
+    document.head.appendChild(bgStyleEl);
+    // 保存されたインデックスを読み込む
+    const savedbgIndex = await window.electronAPI.getbgIndex();
+    currentbgIndex = savedbgIndex ?? 0;    
+  }
+  // b) カスタム背景があれば最優先で適用
+  if (customPaths.background) {
+  console.log('[Init] Applying custom background:', customPaths.background);
+    const dataUrl = await window.electronAPI.getBackgroundDataUrl(customPaths.background);
+    if (dataUrl) {
+      document.body.style.backgroundImage = `url('${dataUrl}')`;
+      document.body.className = document.body.className.replace(/\s?bg-index-\d+/, '');
+    }
+  } else {
+  // c) なければ従来のサイクル背景を適用
   document.body.classList.add(`bg-index-${currentbgIndex}`);
 }
 
-  // a) BGMの初期化
+
+// 3. BGMの初期化
+let initialBgmLoaded = false;
+// a) サイクル機能はどちらにせよ初期化
+  console.log('[Init] Initializing cycle BGM...');
   availablebgms = await window.electronAPI.getbgmList();
   const savedbgmindex = await window.electronAPI.getbgmIndex();
-  const isbgmpaused = await window.electronAPI.getbgmPausedState();
 
-  // ★★★ ここからが新しいロジック ★★★
-  let initialBgmLoaded = false;
   if (savedbgmindex > -1 && savedbgmindex < availablebgms.length) {
     currentbgmIndex = savedbgmindex;
     const bgmFile = availablebgms[currentbgmIndex];
@@ -1585,7 +1652,7 @@ if (availablebgs.length > 0) {
           binary += String.fromCharCode(bytes[i]);
       }
       const base64 = window.btoa(binary);
-      const dataUrl = `data:audio/mpeg;base64,${base64}`;
+      let dataUrl = `data:audio/mpeg;base64,${base64}`;
 
       // <audio>要素に、再生可能なソースを設定
       audioEl.src = dataUrl;
@@ -1595,7 +1662,22 @@ if (availablebgs.length > 0) {
     }
   }
 
-  // ★★★ 状態に基づいて、UIと再生を決定する ★★★
+    // b) カスタムBGMがあれば適用
+  if (customPaths.bgm) {
+    console.log('[Init] Applying custom BGM:', customPaths.bgm);
+    // ★ 1. mainに、data: URLを直接問い合わせ、"完了を待つ"
+    let dataUrl = await window.electronAPI.getBgmDataUrl(customPaths.bgm);
+    
+    if (dataUrl) {
+      // ★ 2. 確実にsrcを設定してから、フラグを立てる
+      audioEl.src = dataUrl;
+      audioEl.loop = true;
+      initialBgmLoaded = true;
+    }
+  } 
+
+  // 4. 再生状態の復元 (共通)
+  const isbgmpaused = await window.electronAPI.getbgmPausedState();
   if (bgmPlayPauseBtn) {
     bgmPlayPauseBtn.textContent = isbgmpaused ? '▶' : '❚❚';
   }

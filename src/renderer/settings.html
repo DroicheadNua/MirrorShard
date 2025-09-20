@@ -21,7 +21,34 @@
     <p id="current-font-display">Current Font: Loading...</p>
     <p id="font-scan-status"></p>
   </section>
-<hr>
+    
+    <hr>
+    
+    <!-- --- Custom Resources --- -->
+    <section id="custom-resources">
+      <h2>Custom Resources</h2>
+      <p class="description">お好きな背景画像やBGMを、サイクル機能とは別に指定します。</p>
+      
+      <div class="form-group">
+        <label for="bg-path-input">Custom Background Image:</label>
+        <div class="file-input-wrapper">
+          <input type="text" id="bg-path-input" readonly placeholder="No custom image selected">
+          <button id="select-bg-btn">Select...</button>
+          <button id="clear-bg-btn" class="clear-btn">×</button>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="bgm-path-input">Custom BGM:</label>
+        <div class="file-input-wrapper">
+          <input type="text" id="bgm-path-input" readonly placeholder="No custom BGM selected">
+          <button id="select-bgm-btn">Select...</button>
+          <button id="clear-bgm-btn" class="clear-btn">×</button>
+        </div>
+      </div>
+    </section>
+
+    <hr>
 
 <section id="external-tools-settings">
   <h2>External Tools</h2>

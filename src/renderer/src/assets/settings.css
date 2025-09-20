@@ -9,7 +9,7 @@ html, body {
   -webkit-app-region: drag; 
 }
 
-#font-settings, #external-tools-settings {
+#font-settings, #external-tools-settings, #custom-resources {
     -webkit-app-region:no-drag;
 }
 

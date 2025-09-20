@@ -270,9 +270,36 @@ onTriggerSaveFile: (callback) => {
     showEncodingWarningDialog: (message) => ipcRenderer.send('show-encoding-warning', message),
     confirmSaveWithEncodingWarning: (fileName) => ipcRenderer.invoke('confirm-save-with-encoding-warning', fileName),
     analyzeSourceFile: (filePath) => ipcRenderer.invoke('analyze-source-file', filePath),
+    getCustomPaths: () => ipcRenderer.invoke('get-custom-paths'),
+    setCustomPath: (args) => ipcRenderer.send('set-custom-path', args),
+
+
+
+
+    getBackgroundDataUrl: (filePath) => ipcRenderer.invoke('get-background-data-url', filePath),
+    getBgmDataUrl: (filePath) => ipcRenderer.invoke('get-bgm-data-url', filePath),
+
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)
+
+//    ウィンドウ間で、安全にイベントを送受信するための、シンプルな仕組み
+contextBridge.exposeInMainWorld('interop', {
+  // メインウィンドウにメッセージを送る
+  sendToMain: (channel: string, data?: any) => {
+    ipcRenderer.send('interop-message', { target: 'main', channel, data });
+  },
+  // メインウィンドウからのメッセージを受け取る
+  onMainMessage: (channel: string, callback: (data: any) => void) => {
+    const handler = (_event, message: any) => {
+      if (message.channel === channel) {
+        callback(message.data);
+      }
+    };
+    ipcRenderer.on('main-interop-message', handler);
+    return () => ipcRenderer.removeListener('main-interop-message', handler);
+  }
+});
 
 // ★★★ マウスの「戻る/進む」ボタンイベントを直接リッスン ★★★
 window.addEventListener('mouseup', (event) => {

@@ -197,11 +197,23 @@ export interface IElectronAPI {
   showEncodingWarningDialog: (message: string) => void;
   confirmSaveWithEncodingWarning: (fileName: string) => Promise<boolean>;
   analyzeSourceFile: (filePath: string) => Promise<{ encoding: string; eol: 'LF' | 'CRLF'; } | null>;
+  getCustomPaths: () => Promise<{ background?: string; bgm?: string }>;
+  setCustomPath: (args: { type: 'background' | 'bgm'; path: string | null }) => void;
+
+
+
+  getBackgroundDataUrl: (filePath: string) => Promise<string | null>;
+  getBgmDataUrl: (filePath: string) => Promise<string | null>;
+
 }
 
 // グローバルなwindowオブジェクトにelectronAPIが存在することを宣言
 declare global {
   interface Window {
     electronAPI: IElectronAPI;
+    interop: {
+      sendToMain: (channel: string, data?: any) => void;
+      onMainMessage: (channel: string, callback: (data: any) => void) => () => void;
+    };    
   }
 }

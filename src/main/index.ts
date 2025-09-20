@@ -7,10 +7,10 @@ import AdmZip from 'adm-zip'
 import Store from 'electron-store'
 import { promises as fsPromises, existsSync, writeFileSync, readFileSync, statSync, cpSync } from 'fs'
 import os from 'os';
-import * as fontkit from 'fontkit';
 import { ExportOptions } from '../@types/electron';
 import util from 'util';
-import { exec } from 'child_process'; 
+
+
 
 // --- [エリア 1: 型定義 & グローバル変数] ---
 interface StoreType {
@@ -31,6 +31,8 @@ interface StoreType {
   appliedSystemFontPath?: string;
   pandocPath?: string;
   kindlegenPath?: string;  
+  customBackgroundPath?: string;
+  customBgmPath?: string;  
 }
 
 const store = new Store<StoreType>({ 
@@ -59,7 +61,7 @@ const historyFilePath = join(userDataPath, 'history.json');
 const MAX_HISTORY = 10;
 const PREVIEW_TEXT_LIMIT = 500000;
 const fontCachePath = join(app.getPath('userData'), 'system-fonts.json');
-const execPromise = util.promisify(exec);
+
 let previewWindow: BrowserWindow | null = null;
 let shortcutWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
@@ -67,6 +69,42 @@ let isQuitting = false;
 let fileToOpenOnStartup: string | null = null;
 let exportWindow: BrowserWindow | null = null;
 let isExporting = false;
+
+// --- [エリア 1.5: 遅延読み込み処理] ---
+import type * as Fontkit from 'fontkit';
+import type { lookup as MimeLookup } from 'mime-types';
+import type { ExecOptions } from 'child_process';
+type ExecPromise = (
+  command: string,
+  options?: ExecOptions
+) => Promise<{ stdout: string; stderr: string }>;
+
+let fontkit: typeof Fontkit | null = null;
+let _lookup: typeof MimeLookup | null = null;
+let _execPromise: ExecPromise | null = null;
+
+function getFontkit() {
+  if (!fontkit) {
+    fontkit = require('fontkit');
+  }
+  return fontkit;
+}
+const getLookup = () => {
+  if (!_lookup) _lookup = require('mime-types').lookup;
+  return _lookup;
+};
+const getExecPromise = (): ExecPromise => {
+  // まだ生成されていなければ
+  if (!_execPromise) {
+    // この場で`exec`を読み込む
+    const { exec } = require('child_process');
+    // 読み込んだ`exec`を`promisify`して、変数にキャッシュする
+    // `as ExecPromise` を付けて、型を明示的に教えてあげることが重要
+    _execPromise = util.promisify(exec) as ExecPromise;
+  }
+  // キャッシュした（または既に存在した）`execPromise`を返す
+  return _execPromise;
+};
 
 // --- [エリア 2: ヘルパー関数] ---
 
@@ -103,55 +141,60 @@ async function analyzeFile(filePath: string): Promise<{
   const buffer = await fsPromises.readFile(filePath);
   let warning: string | undefined = undefined;
 
-  // --- ステップ1: encoding-japaneseによる、唯一の、そして最高の自動判定 ---
-  //    BOMの有無も、この関数が内部で賢く処理してくれます
+  // --- ステップ1: 2つの確証（BOM-less UTF-8 と Shift_JIS）を先に得る ---
+  const contentIsUtf8 = isUtf8(buffer);
+
+  // --- ステップ2: encoding-japaneseによる自動判定 ---
   const detectedEncoding = Encoding.detect(buffer) as Encoding.Encoding | false;
 
-  // --- ステップ2: 判定結果に基づいて、デコードと状態決定を行う ---
+  // --- ステップ3: 判定結果に基づいて、デコードと状態決定を行う ---
   let content: string;
   let finalEncoding: string;
   
-  // a) もし、何らかのエンコーディングが検出されたら...
-  if (detectedEncoding) {
+  // a) BOMがなく、かつ内容がUTF-8として完全に妥当な場合、UTF-8を最優先する
+  //    (FORM FEEDのような制御文字による誤判定をここで覆す)
+  //    ただし、BOM付きファイルは detectedEncoding が 'UTF8BOM' 等になるため、この条件には入らない。
+  if (contentIsUtf8 && detectedEncoding !== 'UTF8BOM' && detectedEncoding !== 'UTF16LE' && detectedEncoding !== 'UTF16BE') {
+    content = buffer.toString('utf8'); // ★ ライブラリを介さず、直接デコード
+    finalEncoding = 'UTF8';
+    
+    // b) ただし、SJISの可能性も探る（安全のための警告）
+    if (isSjis(buffer)) {
+      warning = `このファイルの文字コードはUTF-8と推定されましたが、Shift_JISである可能性もあります...`;
+    }
+  }
+  // c) もし、何らかのエンコーディングが（BOM含め）明確に検出されたら...
+  else if (detectedEncoding) {
     let encodingToUse = detectedEncoding;
-    // a) ASCIIと判定されたものは、常にUTF-8として扱う
     if (detectedEncoding === 'ASCII') {
       encodingToUse = 'UTF8';
     }
-    
-    // b) ★ UTF32は、現在のiconv-lite/encoding-japaneseでは安定して扱えないことが多い
-    //    警告付きで、安全なUTF-8にフォールバックする
     if (detectedEncoding === 'UTF32') {
       encodingToUse = 'UTF8';
       warning = `UTF-32は現在サポートされていません。安全のためUTF-8として開きます。文字化けしている場合は保存せずに閉じてください。`;
     }    
     try {
-      // そのエンコーディングでデコードを試みる
       content = Encoding.convert(buffer, { to: 'UNICODE', from: encodingToUse, type: 'string' });
       finalEncoding = encodingToUse;
-
-      // b) ただし、SJISの可能性も探る（安全のための警告）
-      if ((encodingToUse === 'UTF8') && isSjis(buffer)) {
-        warning = `このファイルの文字コードはUTF-8と推定されましたが、Shift_JISである可能性もあります...`;
-      }
-
     } catch (e) {
-      // c) 検出されたエンコーディングでのデコードに失敗した場合（非常に稀）
-      content = Encoding.convert(buffer, { to: 'UNICODE', from: 'UTF8', type: 'string' });
+      content = buffer.toString('utf8'); // ★ フォールバックもネイティブに
       finalEncoding = 'UTF8';
       warning = `エンコード'${detectedEncoding}'のデコードに失敗しました。UTF-8として開きます。`;
     }
   } 
-  // d) もし、何も検出できなかったら...
+  // d) もし、何も検出できなかったら... 
   else {
     content = Encoding.convert(buffer, { to: 'UNICODE', from: 'UTF8', type: 'string' });
     finalEncoding = 'UTF8';
     warning = `文字コードを自動判別できませんでした。UTF-8として開きます。`;
   }
 
-  // --- ステップ3: EOLを検出し、内容を正規化して返す ---
+  // --- ステップ4: EOLを検出し、内容を正規化して返す ---
   const eol: 'LF' | 'CRLF' = content.includes('\r\n') ? 'CRLF' : 'LF';
-  const normalizedContent = content.replace(/\r\n/g, '\n');
+  // ★ 制御文字(FORM FEED)をここで無害化する
+  const normalizedContent = content
+    .replace(/\r\n/g, '\n') // EOL正規化
+    .replace(/\u000C/g, '[FF]'); // FORM FEEDを可視化
 
   // 表示用のエンコーディング名を整形
   if (finalEncoding === 'SJIS') finalEncoding = 'Shift_JIS';
@@ -171,6 +214,15 @@ function isSjis(buffer: Buffer): boolean {
   } catch (e) {
     return false;
   }
+}
+
+// isUtf8関数を、Node.jsネイティブのBuffer機能で再実装
+function isUtf8(buffer: Buffer): boolean {
+  // Buffer.compareは、2つのバッファが完全に同一であれば0を返します。
+  // bufferをNode.jsネイティブのUTF-8として文字列に変換し、
+  // 即座にUTF-8としてBufferに書き戻します。
+  // 元のバイト列と1バイトも変わらなければ、それは妥当なUTF-8です。
+  return Buffer.compare(buffer, Buffer.from(buffer.toString('utf8'), 'utf8')) === 0;
 }
 
 function loadHistory(): string[] {
@@ -583,10 +635,10 @@ function toggleSettingsWindow() {
 
     settingsWindow = new BrowserWindow({
       // ★ 親の高さに合わせ、幅は少し狭くする
-      minWidth:520,
-      minHeight:480,
-      width: 520,
-      height: 480, 
+      minWidth:540,
+      minHeight:680,
+      width: 540,
+      height: 680, 
       title: 'Settings',
       parent: parentWindow, // 親を指定
       modal: false,
@@ -706,6 +758,7 @@ const mainWindow = new BrowserWindow(mainWindowOptions);
 
 async function scanSystemFontsInternal(): Promise<{ family: string; path: string }[]> {
   console.log('[FontManager] Scanning system fonts...');
+  const fk = getFontkit();
   try {
     const fontList: { family: string; path: string }[] = [];
     const seenFamilies = new Set<string>();
@@ -725,7 +778,7 @@ async function scanSystemFontsInternal(): Promise<{ family: string; path: string
 
         for (const filePath of fontPaths) {
           try {
-            const font = fontkit.openSync(filePath);
+            const font = fk.openSync(filePath);
             const fontsInFile = 'fonts' in font ? (font as any).fonts : [font];
             for (const f of fontsInFile) {
               if (f.familyName && !seenFamilies.has(f.familyName)) {
@@ -757,7 +810,7 @@ async function scanSystemFontsInternal(): Promise<{ family: string; path: string
             if (/\.(ttf|otf|ttc)$/i.test(file)) {
               const filePath = join(dir, file);
               try {
-                const font = fontkit.openSync(filePath);
+                const font = fk.openSync(filePath);
                 const fontsInFile = 'fonts' in font ? (font as any).fonts : [font];
                 for (const f of fontsInFile) {
                   if (f.familyName && !seenFamilies.has(f.familyName)) {
@@ -835,8 +888,10 @@ ipcMain.handle('file:saveFile', async (
   const tempFilePath = `${finalPath}.${Date.now()}-${Math.random().toString(36).substring(2)}.tmp`;
 
   try {
-    // --- 1. すべての変換処理は、これまで通り完璧 ---
-    const contentToSave = options.eol === 'CRLF' ? content.replace(/\n/g, '\r\n') : content;
+    // 表示用の文字列を、ファイルに書き込むべき本来の文字列に戻す 
+    const restoredContent = content.replace(/\[FF\]/g, '\u000C');    
+    // --- 1. すべての変換処理 ---
+    const contentToSave = options.eol === 'CRLF' ? restoredContent.replace(/\n/g, '\r\n') : restoredContent;
     const convertedData = Encoding.convert(contentToSave, {
       from: 'UNICODE',
       to: options.encoding as Encoding.Encoding,
@@ -1094,6 +1149,58 @@ ipcMain.handle('get-target-file-path', (event) => {
   return (window as any).targetFilePath || null;
 });
 
+ipcMain.handle('get-custom-paths', () => {
+  return {
+    background: store.get('customBackgroundPath'),
+    bgm: store.get('customBgmPath'),
+  };
+});
+
+ipcMain.on('set-custom-path', (_event, { type, path }: { type: 'background' | 'bgm', path: string | null }) => {
+  if (type === 'background') {
+    store.set('customBackgroundPath', path);
+    console.log(`[Store] Custom background path set to: ${path}`);
+  } else if (type === 'bgm') {
+    store.set('customBgmPath', path);
+    console.log(`[Store] Custom BGM path set to: ${path}`);
+  }
+});
+
+ipcMain.handle('get-background-data-url', async (_event, filePath: string | null) => {
+  const lookup = getLookup();
+  if (!filePath || !existsSync(filePath)) return null;
+  try {
+    const buffer = await fsPromises.readFile(filePath);
+    const base64 = buffer.toString('base64');
+    const mimeType = lookup(filePath) || 'application/octet-stream';
+    return `data:${mimeType};base64,${base64}`;
+  } catch (e) { return null; }
+});
+
+ipcMain.handle('get-bgm-data-url', async (_event, filePath: string | null) => {
+  const lookup = getLookup();
+  if (!filePath || !existsSync(filePath)) return null;
+  try {
+    const buffer = await fsPromises.readFile(filePath);
+    const base64 = buffer.toString('base64');
+    const mimeType = lookup(filePath) || 'audio/mpeg';
+    return `data:${mimeType};base64,${base64}`;
+  } catch (e) {
+    console.error(`Failed to generate data URL for BGM: ${filePath}`, e);
+    return null;
+  }
+});
+
+
+ipcMain.on('interop-message', (_event, message) => {
+  const mainWindow = BrowserWindow.getAllWindows().find(win => win.isVisible() && win !== settingsWindow && win !== previewWindow && win !== shortcutWindow);
+    // settings -> main -> renderer のように中継
+  if (mainWindow) {
+    mainWindow.webContents.send('main-interop-message', message);
+    console.log(`[Interop] Forwarded message from settings to main window:`, message);
+  }
+});
+
 
 
 ipcMain.on('open-export-window', (_event, filePath: string) => {
@@ -1171,6 +1278,7 @@ ipcMain.on('set-export-busy-state', (_event, isBusy: boolean) => {
 
 // ★★★ Pandoc実行ハンドラ ★★★
 ipcMain.handle('run-export', async (_event, options: ExportOptions) => {
+  const execPromise = getExecPromise();
   isExporting = true;
   const {
     sourceFilePath,
@@ -1382,6 +1490,7 @@ ipcMain.handle('analyze-source-file', async (_event, filePath: string) => {
   });
 
   ipcMain.handle('scan-system-fonts', async (_event, forceRescan: boolean = false) => {
+
     // 1. キャッシュを優先して読み込む
     if (!forceRescan && existsSync(fontCachePath)) {
       try {

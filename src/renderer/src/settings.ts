@@ -11,9 +11,12 @@ const currentFontDisplay = document.getElementById('current-font-display')!;
 const pandocPathInput = document.getElementById('pandoc-path-input') as HTMLInputElement;
 const selectPandocBtn = document.getElementById('select-pandoc-btn') as HTMLButtonElement;
 const pandocLink = document.getElementById('pandoc-link') as HTMLAnchorElement;
-const kindlegenPathInput = document.getElementById('kindlegen-path-input') as HTMLInputElement;
-const selectKindlegenBtn = document.getElementById('select-kindlegen-btn') as HTMLButtonElement;
-const kindlegenLink = document.getElementById('kindlegen-link') as HTMLAnchorElement;
+const selectBgBtn = document.getElementById('select-bg-btn')!;
+const bgPathInput = document.getElementById('bg-path-input') as HTMLInputElement;
+const clearBgBtn = document.getElementById('clear-bg-btn')!;
+const selectBgmBtn = document.getElementById('select-bgm-btn')!;
+const bgmPathInput = document.getElementById('bgm-path-input') as HTMLInputElement;
+const clearBgmBtn = document.getElementById('clear-bgm-btn')!;
 
 /** フォントリストを読み込み、UIを構築する */
 const loadFontList = async (force: boolean) => {
@@ -135,6 +138,61 @@ applyBtn.addEventListener('click', async () => {
     }, 1000);
   }
 });
+
+const paths = await window.electronAPI.getCustomPaths();
+if (paths.background) bgPathInput.value = paths.background;
+if (paths.bgm) bgmPathInput.value = paths.bgm;
+
+// 「Select...」ボタン (背景用)
+selectBgBtn.addEventListener('click', async () => {
+  const path = await window.electronAPI.selectFileDialog({
+    title: '背景画像を選択',
+    filters: [{ name: 'Images', extensions: ['jpg', 'png', 'gif', 'webp'] }],
+  });
+  if (path) {
+    bgPathInput.value = path;
+    window.electronAPI.setCustomPath({ type: 'background', path });
+    // ★ main経由で、rendererに「背景変えて」とお願い
+    window.interop.sendToMain('apply-custom-background', path);
+  }
+});
+
+// 「Clear」ボタン (背景用)
+clearBgBtn.addEventListener('click', () => {
+  bgPathInput.value = '';
+  // ★ ストアのパスをクリア
+  window.electronAPI.setCustomPath({ type: 'background', path: null });
+  bgPathInput.value = '';
+  document.body.style.removeProperty('background-image'); 
+  window.interop.sendToMain('revert-to-cycle-bg');
+});
+
+// 「Select...」ボタン (BGM用)
+selectBgmBtn.addEventListener('click', async () => {
+  const path = await window.electronAPI.selectFileDialog({
+    title: 'BGMを選択',
+    filters: [
+      { name: 'Audio Files', extensions: ['mp3', 'ogg', 'wav', 'm4a'] },
+      { name: 'All Files', extensions: ['*'] }
+    ],
+  });
+  if (path) {
+    bgmPathInput.value = path;
+    // ★ mainに、設定の保存と、全ウィンドウへの適用を"お願い"する
+    window.electronAPI.setCustomPath({ type: 'bgm', path });
+    window.interop.sendToMain('apply-custom-bgm', path);
+  }
+});
+
+// 「Clear」ボタン (BGM用)
+clearBgmBtn.addEventListener('click', () => {
+  bgmPathInput.value = '';
+  window.electronAPI.setCustomPath({ type: 'bgm', path: null });
+  bgmPathInput.value = '';
+  window.interop.sendToMain('revert-to-cycle-bgm');
+});
+
+
 
 closeBtn.addEventListener('click', () => {
   window.electronAPI.closeSettingsWindow();

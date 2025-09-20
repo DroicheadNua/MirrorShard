@@ -1,6 +1,6 @@
 import './assets/preview.css';
-import updateArticle from './ruby';
-import { startSnowing } from './snow'; 
+import updateArticle from './scripts/ruby';
+import { startSnowing } from './scripts/snow'; 
 
 // --- [エリア1: DOM要素の取得] ---
 const contentEl = document.getElementById('content');
