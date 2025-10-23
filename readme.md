@@ -5,6 +5,18 @@ MirrorShard ver. 1.2.1
 
 ![MirrorShard Key Visual](screenshots/ScreenShot01.png)
 
+## ダウンロード
+
+[![Windows](https://img.shields.io/badge/Download-Windows-blue)]
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.2.1/MirrorShard.Setup.1.2.1.exe)
+[![Mac (Apple Silicon)](https://img.shields.io/badge/Download-Mac_(Apple_Silicon)-green)]
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.2.1/MirrorShard-1.2.1-arm64.dmg)
+[![Linux](https://img.shields.io/badge/Download-Linux-lightgrey)]
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.2.1/MirrorShard-1.2.1-x86_64.AppImage)
+
+または、[最新のリリース一覧ページ](https://github.com/DroicheadNua/MirrorShard/releases/latest)からダウンロードできます。  
+  
+
 ■主な特徴  
 ・縦書きと青空文庫形式のルビに対応し、リアルタイムで更新されるプレビューウィンドウ  
 ・数十万行に及ぶ巨大サイズのテキストにも対応  
