@@ -19,7 +19,7 @@ const api: IElectronAPI = {
   closeWindow: () => ipcRenderer.send('window-close'),
 
   // ウィンドウ操作 (共通)
-  toggleFullScreen: () => ipcRenderer.send('window-toggle-fullscreen'),
+  requestToggleFullscreen: () => ipcRenderer.send('request-toggle-fullscreen'),
 
   // フォントサイズ
   getfontsize: () => ipcRenderer.invoke('get-font-size'),
@@ -47,6 +47,7 @@ updatePreviewFont: (fontName) => ipcRenderer.send('update-preview-font', fontNam
 
   // プレビューウィンドウ
   togglePreviewWindow: () => ipcRenderer.send('toggle-preview-window'),
+  toggleIPWindow: () => ipcRenderer.send('toggle-ip-window'),
   openPreviewWindow: (data) => ipcRenderer.send('open-preview-window', data),
   updatePreview: (data) => ipcRenderer.send('update-preview', data),
   onLoadText: (callback) => {
@@ -63,7 +64,7 @@ updatePreviewFont: (fontName) => ipcRenderer.send('update-preview-font', fontNam
     return () => ipcRenderer.removeListener('sync-scroll-position-to-preview', handler);
   },
   onOpenFile: (callback) => {
-    const handler = (_event, filePath: string) => callback(filePath);
+    const handler = (_event, filePath: string, isTemporary: boolean) => callback(filePath, isTemporary);
     ipcRenderer.on('open-file', handler);
     return () => ipcRenderer.removeListener('open-file', handler);
   },
@@ -223,6 +224,10 @@ onTriggerSaveFile: (callback) => {
     ipcRenderer.on('toggle-outline-shortcut', callback);
     return () => ipcRenderer.removeAllListeners('toggle-outline-shortcut');
   },
+  onToggleRightAlignShortcut: (callback) => {
+    ipcRenderer.on('toggle-right-align-shortcut', callback);
+    return () => ipcRenderer.removeAllListeners('toggle-right-align-shortcut');
+  },  
   openResourcesFolder: () => ipcRenderer.send('open-resources-folder'),
   onCycleTab: (callback) => {
     const handler = (_event, direction: 'next' | 'previous') => callback(direction);
@@ -245,6 +250,7 @@ onTriggerSaveFile: (callback) => {
     return () => ipcRenderer.removeListener('apply-system-font-from-settings', handler);
   },  
   toggleSettingsWindow: () => ipcRenderer.send('toggle-settings-window'),
+  createIdeaProcessorWindow: () => ipcRenderer.send('toggle-IP-window'),
 
   getAppliedSystemFontPath: () => ipcRenderer.invoke('get-applied-system-font-path'),
   setAppliedSystemFontPath: (filePath) => ipcRenderer.invoke('set-applied-system-font-path', filePath),
@@ -278,7 +284,43 @@ onTriggerSaveFile: (callback) => {
 
     getBackgroundDataUrl: (filePath) => ipcRenderer.invoke('get-background-data-url', filePath),
     getBgmDataUrl: (filePath) => ipcRenderer.invoke('get-bgm-data-url', filePath),
-
+  saveIdeaProcessorFile: (filePath, saveData) => ipcRenderer.invoke('idea:saveFile', filePath, saveData),
+  on: (channel, callback) => ipcRenderer.on(channel, (_event, ...args) => callback(...args)),
+  debugLog: (...args) => ipcRenderer.send('debug-log', ...args),
+  notifyReadyForData: () => ipcRenderer.send('renderer-ready-for-data'),
+  ideaOpenFile: () => ipcRenderer.invoke('idea:openFile'),
+  ideaOpenFileByPath: (filePath) => ipcRenderer.invoke('idea:openFileByPath', filePath),
+  checkDirtyState: () => ipcRenderer.invoke('check-dirty-state'),
+  triggerSaveSync: () => ipcRenderer.invoke('trigger-save-sync'),
+  notifyReadyToClose: (canClose, zoomState, nextFilePath) => 
+    ipcRenderer.send('ready-to-close', canClose, zoomState, nextFilePath),
+  historyPush: (stateString) => ipcRenderer.invoke('history:push', stateString),
+  historyUndo: () => ipcRenderer.invoke('history:undo'),
+  historyRedo: () => ipcRenderer.invoke('history:redo'),  
+  fileNew: () => ipcRenderer.send('file:new'),
+  notifyTitleChange: (filePath) => ipcRenderer.send('notify-title-change', filePath),  
+  notifyRendererIsReady: () => ipcRenderer.send('renderer-is-ready'),
+  exportAsMarkdown: (content: string, currentPath: string | null) => 
+  ipcRenderer.send('export-as-markdown', content, currentPath),
+  exportAsImage: (dataUrl, format, currentPath) => 
+  ipcRenderer.send('export-as-image', dataUrl, format, currentPath),
+  exportAsPdf: (dataUrl, currentPath) => 
+  ipcRenderer.send('export-as-pdf', dataUrl, currentPath),
+  exportAsHtml: (dataUrl, currentPath) => 
+  ipcRenderer.send('export-as-html', dataUrl, currentPath),
+  sendMarkdownToEditor: (content) => ipcRenderer.send('send-markdown-to-editor', content),
+  importFromScrivener: () => ipcRenderer.invoke('import-from-scrivener'),
+  onContextMenuCommand: (callback) => 
+  ipcRenderer.on('context-menu-command', (_event, command) => callback(command)),
+  resetIpWindow: () => ipcRenderer.send('reset-ip-window'),
+  getStoreValue: (key, defaultValue) => ipcRenderer.invoke('get-store-value', key, defaultValue),
+  setStoreValue: (key, value) => ipcRenderer.send('set-store-value', key, value),
+  requestNativeUndo: () => ipcRenderer.send('request-native-undo'),
+  requestNativeRedo: () => ipcRenderer.send('request-native-redo'),  
+  checkForUnsavedChanges: () => ipcRenderer.invoke('check-for-unsaved-changes'),
+  confirmSaveDialog: (windowName) => ipcRenderer.invoke('confirm-save-dialog', windowName),
+  toggleIpAlwaysOnTop: () => ipcRenderer.invoke('toggle-ip-always-on-top'),
+  togglePreviewAlwaysOnTop: () => ipcRenderer.invoke('toggle-preview-always-on-top'),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

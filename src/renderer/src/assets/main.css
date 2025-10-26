@@ -12,7 +12,7 @@
   --outline-hover-bg: rgba(0, 0, 0, 0.2);
   --editor-bg-image: none; /* 背景画像を指定 */
   --editor-gradient: transparent;
-  --editor-text-color: #333333;
+  --editor-text-color: #111111;
   --editor-caret-color:#333333;
   --app-bg-color: transparent; 
   --scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
@@ -26,15 +26,15 @@
 
 /* ★ bodyに 'dark-mode' クラスが付いたときのスタイル */
 body.dark-mode {
-  --outline-bg-color: #444;
+  --outline-bg-color: #333;
   --outline-text-color: #CCCCCC;
   --outline-border-color: #555555; /* ボタンの枠線用に少し明るい色 */
   --outline-button-text-color: #AAAAAA; /* ボタンの文字色用 */
   --outline-hover-bg: rgba(200, 200, 200, 0.2);
   --editor-bg-image: none; /* ★ 背景画像をなくす */
-  --editor-gradient: #444444;
+  --editor-gradient: #333333;
   --editor-text-color: #DDDDDD;
-  --app-bg-color: #444;
+  --app-bg-color: #333;
   --scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
   --scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.35);
   --btn-bg-color: rgba(100,100,100, 0.3);
@@ -293,11 +293,16 @@ body.zen-mode #container {
   -webkit-app-region: no-drag; 
 }
 
+body.right-align-mode #main-content {
+  justify-content: right; 
+}  
+
 /* a. Focusモード時、メインコンテンツのグリッド定義を"上書き"する */
 body.focus-mode #main-content {
   /* ★ 3列グリッド: 左の余白 | テキストエリア | 右の余白 */
   display: grid;
   grid-template-columns: 1fr 35% 0.03fr;
+  justify-content: center; 
   padding-top: 2%;
   padding-bottom:2%;
   gap: 30px;
@@ -439,4 +444,11 @@ body.dark-mode .cm-panel.cm-search {
 /* チェックボックスの隣のラベル */
 .cm-search label {
   color: #b0b0b0;
+}
+
+/* スポットライトモードで、フォーカスされていない部分のスタイル */
+.cm-unfocused {
+  opacity: 0.5; /* ブラーなし、透明度15%だと薄く見えて内容も確認できる。この値は好みで */
+  transition: opacity 0.3s ease-in-out; /* ふわっと切り替わるアニメーション */
+  filter:blur(0.3em);
 }

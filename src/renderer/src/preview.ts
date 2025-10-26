@@ -175,7 +175,7 @@ window.electronAPI.onApplySystemFontFromSettings(async (fontData) => {
 
 
 // ★★★ サイクルフォントの変更を同期するリスナーも、念のため確認 ★★★
-// (SnowEditorのコードから、このリスナーがあるはずです)
+
 window.electronAPI.onPreviewFontChange((fontName) => {
   console.log(`[Preview] Applying cycle font: ${fontName}`);
   const contentEl = document.getElementById('content');
@@ -225,7 +225,7 @@ window.electronAPI.onScrollTo((direction) => {
 
 snowToggleBtn?.addEventListener('click', () => {
   // mainに中継してもらい、自分自身に命令を送り返す
-  window.electronAPI.triggerSnowToggle();
+  window.electronAPI.togglePreviewSnow();
 });
 
 // onTriggerSnowToggleが呼ばれたかを確認
@@ -234,9 +234,28 @@ window.electronAPI.onTriggerSnowToggle(() => {
   toggleSnow(); // 既存のtoggleSnow関数を呼び出す
 });
 
+// 最前面表示
+  const toggleOnTopBtn = document.getElementById('preview-toggle-on-top-btn');
+
+  if (toggleOnTopBtn) {
+    // --- a) ボタンのクリックイベント ---
+    toggleOnTopBtn.addEventListener('click', async () => {
+      const isNowOnTop = await window.electronAPI.togglePreviewAlwaysOnTop();
+      // ボタンの見た目を更新
+      toggleOnTopBtn.style.opacity = isNowOnTop ? '1.0' : '0.5';
+    });
+  }
+  async function setInitialState() {
+      const isInitiallyOnTop = await window.electronAPI.getStoreValue('isPreviewAlwaysOnTop', true);
+      if (toggleOnTopBtn) {
+          toggleOnTopBtn.style.opacity = isInitiallyOnTop ? '1.0' : '0.5';
+      }
+  }
+  setInitialState();
+
 // フルスクリーンボタン
 fullscreenBtn?.addEventListener('click', () => {
-  window.electronAPI.toggleFullScreen();
+  window.electronAPI.requestToggleFullscreen();
 });
 
 // 閉じるボタン

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Idea Processor</title>
+    <!-- ここでCSSを読み込む -->
+    <link rel="stylesheet" href="./src/assets/idea-processor.css">
+  </head>
+<body>
+  <div id="ip-title-bar">
+    <div class="top-right-buttons">
+      <button id="ip-new-file-button" title="New File (Ctrl+N)">N</button>
+      <button id="ip-create-group-button" title="Create Group (Ctrl+G)">G</button>
+      <button id="ip-fullscreen-btn" title="Maximize Window (F11/Cmd+Ctrl+F)">⤢</button>
+      <button id="ip-close-btn" title="Close (Ctrl+I)">×</button>      
+      <div class="export-container">
+        <button id="ip-theme-toggle-button" title="Toggle Dark Mode (Ctrl+T)">D</button>
+        <button id="ip-toggle-outline-btn" title="Show/Hide Outline (Ctrl+Shift+O)">O</button>
+        <button id="ip-export-button" title="Export...">E</button>
+        <div id="ip-export-menu" class="hidden">
+          <div class="export-item" data-format="html">Export as HTML</div>
+          <div class="export-item" data-format="md">Export as Markdown</div>
+          <div class="export-item" data-format="png">Export as PNG Image</div>
+          <div class="export-item" data-format="pdf">Export as PDF</div>
+          <div class="export-item" data-format="send-to-editor">Send to Editor</div>
+        </div>
+        <button id="ip-toggle-on-top-btn" title="Toggle Always on Top">📌</button>  
+      </div>
+      <button id="ip-zoom-reset-btn" title="Zoom Reset">R</button>
+      <button id="ip-reset-window-btn" title="Initialize Window Position & Zoom (Ctrl+R)">I</button>      
+      <button id="ip-save-as-button" title="Save As...">S</button>
+      <button id="ip-load-button" title="Load (Ctrl+O)">L</button>
+    </div>
+  </div>
+  <div id="ip-main-container">
+    <div id="ip-outline-pane" class="hidden">
+      <div id="ip-outline-controls">
+        <button id="outline-collapse-all" title="Collapse All">↑</button>
+        <button id="outline-expand-all" title="expand-all">↓</button>
+      </div>
+      <div id="ip-outline-content"></div>
+    </div>
+    <div id="ip-editor-pane" class="hidden"> 
+      <textarea id="ip-content-editor" spellcheck="false"></textarea>
+    </div>
+    <div id="ip-container"></div>
+  </div>
+    <textarea id="ip-text-editor" spellcheck="false"></textarea>
+    <textarea id="ip-label-editor" style="display: none;" spellcheck="false"></textarea>
+  <div id="ip-filename-display"></div>
+  
+  <!-- ファイル読み込み用の隠しinput -->
+  <input type="file" id="load-input" accept=".mrsd" style="display: none;">
+  <div id="container"></div>
+  <script type="module" src="./src/idea-processor-renderer.ts"></script>
+</body>
+</html>

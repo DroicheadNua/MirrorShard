@@ -24,7 +24,8 @@ export default defineConfig({
           preview_window: resolve(__dirname, 'src/renderer/preview.html'),
           shortcut_window: resolve(__dirname, 'src/renderer/shortcut.html'),
           settings_window: resolve(__dirname, 'src/renderer/settings.html'),
-          export_window: resolve(__dirname, 'src/renderer/export.html')
+          export_window: resolve(__dirname, 'src/renderer/export.html'),
+          idea_processor_window: resolve(__dirname, 'src/renderer/idea-processor.html'),
         }
       }
     }

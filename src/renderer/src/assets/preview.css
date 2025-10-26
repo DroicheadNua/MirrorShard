@@ -58,7 +58,7 @@ html, body {
   font-size: 18px;
   line-height: 2.0;
   background-color: transparent;
-  color: #333;
+  color: #111;
   caret-color: #333; 
   /* contenteditableのデフォルトの枠線を消す */
   outline: none;
@@ -79,6 +79,9 @@ body.dark-mode #content {
 #preview-controls {
   padding: 0 8px;
   -webkit-app-region: no-drag;
+  justify-content: center;
+  display: flex;
+  align-items: center;
 }
 
 #preview-controls button {
@@ -89,6 +92,7 @@ body.dark-mode #content {
   width: 24px;
   height: 24px;
   cursor: pointer;
+  margin: 2px;
   -webkit-app-region: no-drag; /* ボタン自体はドラッグ不可に */
 }
 #snow-toggle-btn{
@@ -96,6 +100,16 @@ body.dark-mode #content {
   justify-content: center;
   align-items: center;
   padding-left: 4px;
+  padding-top: 0px;
+}
+
+#preview-toggle-on-top-btn{
+ text-align: center;
+  justify-content: center;
+  align-items: center;
+  padding-top: 0px;
+  padding-bottom: 0px;
+  padding-left: 2px;
 }
 
 body.dark-mode #preview-controls button {

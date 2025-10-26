@@ -1,0 +1,378 @@
+@font-face {
+  font-family: 'Klee Custom'; 
+  src: url(../../../../resources/fonts/KleeOne-Regular.ttf);
+} 
+ 
+ /* --- ライトモードのスタイル --- */
+body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Klee Custom', serif-ja, serif;
+  background-image: url(../../../../resources/background/BG03.png); 
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+/* /src/assets/idea-processor.css に追加 */
+
+#ip-main-container {
+  display: flex;
+  height: calc(100vh - 48px); /* タイトルバーの高さを引く */
+}
+
+#ip-container {
+  flex-grow: 1; /* 残りのスペースをすべて使う */
+  min-width: 0; /* flexアイテムの縮小を許可 */
+  z-index: 5;
+}
+
+#ip-editor-pane {
+  flex: 0 0 350px; /* 幅350pxで固定、伸縮しない */
+  display: flex;
+  flex-direction: column;
+  /* padding: 8px; */
+  /* border-left: 1px solid #555;  */
+  background-color: transparent;
+  z-index: 10;
+}
+
+#ip-editor-pane.hidden {
+  display: none;
+}
+
+#ip-content-editor {
+  flex-grow: 1; /* ペイン内の残りの高さをすべて使う */
+  width: 100%;
+  box-sizing: border-box;
+  resize: none; /* リサイズハンドルを非表示 */
+  border:none;
+  background-color: transparent;
+  opacity: 70%;
+  color: #111; 
+  font-style: italic;
+  font-family: 'Klee Custom', serif-ja, serif;
+  font-size: 16px;
+  margin-bottom: 8px;
+  margin-left: 1em;
+}
+body.dark-mode #ip-content-editor {
+  color: #ccc; 
+}
+
+#ip-content-editor:focus,
+#ip-content-editor:focus-visible {
+  outline: none;
+}
+
+
+
+/* ドラッグ用のタイトルバー */
+#ip-title-bar {
+  position: fixed; /* or absolute */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 36px; /* ボタンが収まる高さ */
+  -webkit-app-region: drag;
+  z-index: 12; 
+}
+
+/* ファイル名を表示するspan */
+#ip-filename-display {
+  position: fixed;
+  bottom: 5px;
+  right: 10px;
+  color: #222; 
+  font-size: 13px;
+  opacity: 0.7;
+  z-index: 10000;
+  pointer-events: none; /* マウスイベントを貫通させる */
+}
+
+/* ダークモードでは少し明るい色に */
+body.dark-mode #ip-filename-display {
+  color: #ccc;
+}
+
+/* ボタンをまとめるコンテナ */
+.top-right-buttons {
+  position: fixed; /* or absolute */
+  top: 4px; 
+  right: 10px;
+  -webkit-app-region: no-drag;
+  z-index: 15; 
+}
+
+  .top-right-buttons button {
+  background: rgba(0,0,0,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  border-radius: 30%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: center;
+  -webkit-app-region: no-drag;
+  z-index: 150;
+  }
+
+#outline-collapse-all, #outline-expand-all {
+  background: transparent;
+  border: none;
+  color: #111;
+  border-radius: 30%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: center;
+  -webkit-app-region: no-drag;
+  z-index: 150;
+}
+
+  #ip-text-editor {
+    border: 1px solid #33333333;
+    /* 他の共通スタイル */
+    position: absolute; 
+    display: none; 
+    box-sizing: border-box; 
+    padding: 8px;
+    font-family: 'Klee Custom', serif-ja, serif;
+    font-size: 16px; 
+    line-height: 1.2;
+    background-color: transparent; 
+    resize: none; 
+    outline: none; 
+    z-index: 1000;
+    border-radius: 10px; 
+    transition: color 0.3s ease, border-color 0.3s ease;
+  }
+    #ip-label-editor {
+    position: absolute;
+    z-index: 1001; /* textareaより手前に */
+    border: 1px solid var(--selection-color, #333);
+    background-color: transparent;
+    font-family: 'Klee Custom', serif-ja, serif;
+    color: var(--text-color, #333);
+    padding: 4px; /* paddingを少し調整 */
+    box-sizing: border-box;
+    outline: none;
+    resize: none; 
+  }
+
+/* ダークモード用のスタイル */
+body.dark-mode  {
+  background-image:none;
+  background-color: #333333;
+}
+body.dark-mode #ip-text-editor {
+  color: #ccc;
+  border: 1px solid #cccccc33;
+}
+body.dark-mode #ip-label-editor {
+  color: #ccc;
+}
+body.dark-mode .top-right-buttons button ,body.dark-mode #outline-collapse-all, body.dark-mode #outline-expand-all {
+  background: rgba(100,100,100, 0.3);
+  border: 1px solid rgba(0,0,0,0.2);
+  color: #CCCCCC;
+}
+
+
+  
+  /* --- スクロールバー非表示--- */
+  #ip-text-editor::-webkit-scrollbar { width: 0; height: 0; }
+  #ip-text-editor { scrollbar-width: none; }
+  #ip-label-editor::-webkit-scrollbar { width: 0; height: 0; }
+  #ip-label-editor { scrollbar-width: none; }  
+
+  /* ドロップダウンメニュー */
+
+.export-container {
+  position: relative; /* ドロップダウンメニューの位置の基準点 */
+}
+
+#ip-export-menu {
+  position: absolute;
+  top: 100%; /* ボタンの真下に表示 */
+  right: 0;
+  background-color: #333; /* ダークモードに合わせた色 */
+  border: 1px solid #555;
+  border-radius: 4px;
+  min-width: 180px;
+  z-index: 100;
+  padding: 5px 0;
+}
+
+#ip-export-menu.hidden {
+  display: none;
+}
+
+.export-item {
+  padding: 8px 12px;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.export-item:hover {
+  background-color: #555;
+}
+
+/* ライトモード用のスタイル */
+body:not(.dark-mode) #ip-export-menu {
+  background-color: #f9f9f9;
+  border-color: #ddd;
+}
+body:not(.dark-mode) .export-item {
+  color: #333;
+}
+body:not(.dark-mode) .export-item:hover {
+  background-color: #eee;
+}
+
+/* --- アイデアプロセッサ用アウトラインパネル --- */
+
+/* パネル全体のコンテナ */
+#ip-outline-pane {
+  width: 150px; 
+  flex-shrink: 0;
+  display: flex; 
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--outline-bg-color); /* エディタと共通の変数を使えると美しい */
+  font-family: 'Klee Custom', serif-ja, serif;
+  height: 100%; 
+  margin-left: 1em;
+  overflow-y: auto; 
+}
+/* ライトモード用 */
+body:not(.dark-mode) #ip-outline-pane {
+  background-color: transparent;
+}
+
+#ip-outline-pane.hidden { display: none; }
+
+/* スクロールバーのスタイル */
+#ip-outline-pane::-webkit-scrollbar { width: 8px; }
+#ip-outline-pane::-webkit-scrollbar-track { background: transparent; }
+#ip-outline-pane::-webkit-scrollbar-thumb {
+  background-color: rgba(120, 120, 120, 0.5); 
+  border-radius: 5px;
+  background-clip: padding-box;
+}
+#ip-outline-pane::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(150, 150, 150, 0.7);
+}
+body:not(.dark-mode) #ip-outline-pane::-webkit-scrollbar-thumb { background-color: rgba(150, 150, 150, 0.4); }
+body:not(.dark-mode) #ip-outline-pane::-webkit-scrollbar-thumb:hover { background-color: rgba(120, 120, 120, 0.7); }
+
+
+/* --- グループのヘッダー（トグル ＋ ラベル） --- */
+.outline-group-header {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  font-weight: bold;
+  font-size: 14px;
+  color: #ccc;
+}
+body:not(.dark-mode) .outline-group-header {
+  color: #333;
+}
+
+/* 開閉用のトグル（▼） */
+.outline-toggle {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+.outline-toggle.collapsed {
+  transform: rotate(-90deg);
+}
+
+/* --- ノードのリスト --- */
+.outline-node-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* 個々のノード項目 */
+.outline-node {
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  padding: 4px 8px 4px 24px; /* トグルの分、左をインデント */
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: #aaa;
+}
+body:not(.dark-mode) .outline-node {
+  color: #555;
+}
+
+/* ホバー/アクティブ時のスタイル */
+.outline-node:hover {
+  background-color: #444;
+  color: #eee;
+}
+body:not(.dark-mode) .outline-node:hover {
+  background-color: #eeeeee99;
+  color: #111;
+}
+
+/* --- アイデアプロセッサのコンテンツエディタ用スクロールバー --- */
+
+/* スクロールバー全体の幅を定義 */
+#ip-content-editor::-webkit-scrollbar {
+  width: 10px;
+}
+
+/* スクロールバーの軌道（トラック）のスタイル */
+#ip-content-editor::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* スクロールバーのつまみ（サム）のスタイル */
+#ip-content-editor::-webkit-scrollbar-thumb {
+  background-color: rgba(120, 120, 120, 0.5); /* 半透明のグレー */
+  border-radius: 5px;
+
+}
+
+/* ホバー時のつまみのスタイル */
+#ip-content-editor::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(150, 150, 150, 0.7);
+}
+
+/* ライトモード用の色調整 */
+body:not(.dark-mode) #ip-content-editor::-webkit-scrollbar-thumb {
+  background-color: rgba(150, 150, 150, 0.5);
+}
+body:not(.dark-mode) #ip-content-editor::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(120, 120, 120, 0.7);
+}
+
+/* ボタンコンテナが無効化されたときのスタイル */
+.top-right-buttons.disabled {
+  pointer-events: none; 
+  opacity: 0.5;  
+  transition: opacity 0.2s ease-in-out;
+}

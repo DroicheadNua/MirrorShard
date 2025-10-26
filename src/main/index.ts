@@ -1,6 +1,6 @@
 // src/main/index.ts
 import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol } from 'electron'
-import { join, basename, extname } from 'path'
+import path, { join, basename, extname } from 'path'
 import * as Encoding from 'encoding-japanese';
 import { electronApp, is } from '@electron-toolkit/utils'
 import AdmZip from 'adm-zip'
@@ -30,9 +30,14 @@ interface StoreType {
   windowBounds?: { x: number; y: number; width: number; height: number; };
   appliedSystemFontPath?: string;
   pandocPath?: string;
-  kindlegenPath?: string;  
+  isOutlineVisible: boolean; 
+  isRightAlign: boolean;
   customBackgroundPath?: string;
   customBgmPath?: string;  
+  isFullscreen?: boolean;
+  ideaProcessorIsMaximized?: boolean;
+  isIpAlwaysOnTop?: boolean; 
+  isPreviewAlwaysOnTop?: boolean;
 }
 
 const store = new Store<StoreType>({ 
@@ -52,23 +57,59 @@ const store = new Store<StoreType>({
     isZenMode: false,
     windowBounds: undefined,
     pandocPath: 'pandoc',
-    kindlegenPath: 'kindle',    
+    isOutlineVisible: true,   
+    isRightAlign: false,
+    isFullscreen: false,
+    ideaProcessorIsMaximized: false,
+    isIpAlwaysOnTop: true, 
+    isPreviewAlwaysOnTop: true,    
   }
 });
+
+interface CanvasNode {
+  id: string;
+  type: 'file';
+  file: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  title: string;
+  parentId?: string | null; // 親グループのID。存在しない場合もあるのでオプショナルに。
+}
+
+interface CanvasGroup {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string;
+}
+
 const userDataPath = app.getPath('userData');
 const iconPath = join(__dirname, '../../resources/icon.png');
 const historyFilePath = join(userDataPath, 'history.json');
 const MAX_HISTORY = 10;
 const PREVIEW_TEXT_LIMIT = 500000;
 const fontCachePath = join(app.getPath('userData'), 'system-fonts.json');
+const isMac = process.platform === 'darwin'
 
 let previewWindow: BrowserWindow | null = null;
 let shortcutWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
+let ideaProcessorWindow: BrowserWindow | null = null;
+let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 let fileToOpenOnStartup: string | null = null;
 let exportWindow: BrowserWindow | null = null;
 let isExporting = false;
+
+const autoSaveDir = path.join(app.getPath('userData'), 'ipAutoSave');
+const untitledPath = path.join(autoSaveDir, 'Untitled.mrsd');
+const historyDir = path.join(app.getPath('userData'), 'ipHistory');
+let historyFiles: string[] = [];
+let historyIndex = -1;
 
 // --- [エリア 1.5: 遅延読み込み処理] ---
 import type * as Fontkit from 'fontkit';
@@ -225,6 +266,14 @@ function isUtf8(buffer: Buffer): boolean {
   return Buffer.compare(buffer, Buffer.from(buffer.toString('utf8'), 'utf8')) === 0;
 }
 
+async function resetIPHistory() {
+  await fsPromises.rm(historyDir, { recursive: true, force: true }).catch(() => {});
+  await fsPromises.mkdir(historyDir, { recursive: true });
+  historyFiles = [];
+  historyIndex = -1;
+  console.log(`reset IP History`);
+}
+
 function loadHistory(): string[] {
   try {
     if (existsSync(historyFilePath)) {
@@ -260,8 +309,6 @@ function buildMenu(): void {
     click: () => openFileInWindow(filePath)
   }))
 
-  const isMac = process.platform === 'darwin'
-
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac
       ? [
@@ -290,14 +337,26 @@ function buildMenu(): void {
           click: () => {
             BrowserWindow.getFocusedWindow()?.webContents.send('trigger-new-file');
           }
-        },        
+        },
+        {
+          label: 'Idea Processor', 
+          accelerator: 'CmdOrCtrl+I',
+          click: () => {
+            createIdeaProcessorWindow(); 
+          }
+        },                         
         {
           label: 'Open File...',
           accelerator: 'CmdOrCtrl+O',
-  click: () => {
-    // 最もアクティブなウィンドウに命令を送る
-    BrowserWindow.getFocusedWindow()?.webContents.send('trigger-open-file');
-  }
+          click: () => {
+        const focusedWindow = BrowserWindow.getFocusedWindow();
+        if (!focusedWindow) return;
+        if (focusedWindow === ideaProcessorWindow) {
+          handleOpenIdeaProcessorFile(); 
+        } else {
+            BrowserWindow.getFocusedWindow()?.webContents.send('trigger-open-file');
+          }
+         }
         },
 
 {
@@ -323,18 +382,46 @@ function buildMenu(): void {
             }
       ]
     },
+{
+  label: 'Edit',
+  submenu: [
     {
-      label: 'Edit',
-      submenu: [
-        { role: 'undo' as const },
-        { role: 'redo' as const },
-        { type: 'separator' as const },
-        { role: 'cut' as const },
-        { role: 'copy' as const },
-        { role: 'paste' as const },
-        { role: 'selectAll' as const }
-      ]
+      label: 'Undo',
+      accelerator: 'CmdOrCtrl+Z',
+      click: () => { // ★ 引数は使わない
+        // ★ `getFocusedWindow()`で、現在のウィンドウを確実に取得
+        const focusedWindow = BrowserWindow.getFocusedWindow();
+        if (!focusedWindow) return;
+
+        if (focusedWindow === ideaProcessorWindow) {
+          focusedWindow.webContents.send('trigger-ip-undo');
+        } else {
+          // ★ `focusedWindow`は、本物の`BrowserWindow`なので、`webContents`が存在する
+          focusedWindow.webContents.undo(); 
+        }
+      }
     },
+    {
+      label: 'Redo',
+      accelerator: 'CmdOrCtrl+Y',
+      click: () => {
+        const focusedWindow = BrowserWindow.getFocusedWindow();
+        if (!focusedWindow) return;
+
+        if (focusedWindow === ideaProcessorWindow) {
+          focusedWindow.webContents.send('trigger-ip-redo');
+        } else {
+          focusedWindow.webContents.redo();
+        }
+      }
+    },
+    { type: 'separator' },
+    { label: 'Cut', accelerator: 'CmdOrCtrl+X', role: 'cut' }, // ★ roleが使えるものは、roleを使うのが一番シンプル
+    { label: 'Copy', accelerator: 'CmdOrCtrl+C', role: 'copy' },
+    { label: 'Paste', accelerator: 'CmdOrCtrl+V', role: 'paste' },
+    { label: 'Select All', accelerator: 'CmdOrCtrl+A', role: 'selectAll' } // ★ selectAllに修正
+  ]
+},
     {
       label: 'View',
 submenu: [
@@ -483,9 +570,23 @@ submenu: [
       accelerator: 'CmdOrCtrl+Shift+O',
       visible: false, // メニューには表示しない
       click: () => {
+        const focusedWindow = BrowserWindow.getFocusedWindow();
+        if (!focusedWindow) return;
+        if (focusedWindow === ideaProcessorWindow) {
+          focusedWindow.webContents.send('toggle-ip-outline');
+        } else {
         BrowserWindow.getFocusedWindow()?.webContents.send('toggle-outline-shortcut');
       }
+     }
     },
+    {
+      label: 'Toggle Right Align',
+      accelerator: 'CmdOrCtrl+Shift+D',
+      visible: false, // メニューには表示しない
+      click: () => {
+        BrowserWindow.getFocusedWindow()?.webContents.send('toggle-right-align-shortcut');
+      }
+    },    
     {
       label: 'Cycle Next Tab',
       accelerator: 'Ctrl+Tab',
@@ -505,7 +606,38 @@ submenu: [
     { type: 'separator' as const },        
         { role: 'toggleDevTools' as const },
         { type: 'separator' as const },
-        { role: 'togglefullscreen' as const }
+    {
+      label: 'Toggle Fullscreen',
+      // ★ F11 (Windows/Linux) と Cmd+Ctrl+F (macOS) の両方を公式にサポート
+      accelerator: process.platform === 'darwin' ? 'Cmd+Ctrl+F' : 'F11',
+      click: (_, focusedWindow) => {
+        if (!focusedWindow) return;
+        if (focusedWindow === ideaProcessorWindow || focusedWindow === previewWindow) {
+            // --- サブウィンドウの処理 (最大化) ---
+            if (!focusedWindow.isMaximized()) {
+                // 保存してから最大化
+                if (focusedWindow === ideaProcessorWindow) {
+                    store.set('ideaProcessorWindow.bounds', focusedWindow.getBounds());
+                } else if (focusedWindow === previewWindow) {
+                    store.set('previewBounds', focusedWindow.getBounds());
+                }
+                focusedWindow.maximize();
+            } else {
+                focusedWindow.unmaximize();
+            }
+        } 
+        else {
+            // --- メインウィンドウの処理 (フルスクリーン) ---
+            const isCurrentlyFullscreen = focusedWindow.isFullScreen();
+            // これからフルスクリーンにする場合
+            if (!isCurrentlyFullscreen) {
+                // 保存してからフルスクリーンに
+                store.set('windowBounds', focusedWindow.getBounds());
+            }        
+            focusedWindow.setFullScreen(!isCurrentlyFullscreen);
+        }
+      }
+    }
       ]
     },
     {
@@ -564,37 +696,32 @@ submenu: [
 function toggleShortcutWindow() {
   if (shortcutWindow && !shortcutWindow.isDestroyed()) {
     shortcutWindow.close();
-  }  
-  if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.close();
-  }  
-  if (exportWindow && !exportWindow.isDestroyed()) {
-    exportWindow.close();   
-  } else {
-    // ★ 親ウィンドウ（メインウィンドウ）を取得
-    const parentWindow = BrowserWindow.getAllWindows().find(w => w.isVisible());
-    if (!parentWindow) return; // 親がいなければ開かない
+    return;
+  }
+  
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    dialog.showErrorBox('Error', 'Cannot open the shortcut window without a main window.');
+    return;
+  }
 
-    // ★ 親のサイズを取得
-    const parentBounds = parentWindow.getBounds();
+  const baseWidth = 540; 
+  const baseHeight = 700; 
+  const isDarkMode = store.get('isDarkMode', false);
 
-    shortcutWindow = new BrowserWindow({
-      // ★ 親の高さに合わせ、幅は少し狭くする
-      width: Math.max(Math.round(parentBounds.width * 0.9)),
-      height: Math.max( Math.round(parentBounds.height * 0.9)), 
-      title: 'Shortcut Keys',
-      parent: parentWindow, // 親を指定
-      modal: true,
-      frame: false,
-      show: false,
-      // webPreferences: { ... } // preloadは不要
-    });
-    shortcutWindow.webContents.on('did-finish-load', () => {
-      if (process.platform === 'darwin') { // もしmacOSなら
-        const css = `.mac-only { display: inline !important; }`;
-        shortcutWindow?.webContents.insertCSS(css);
-      }
-    });
+  shortcutWindow = new BrowserWindow({
+    width: baseWidth,
+    height: baseHeight,
+    title: 'Shortcut Keys',
+    parent: mainWindow, 
+    modal: false, 
+    frame: false,  
+    resizable: false,  
+    show: false,
+    backgroundColor: isDarkMode ? '#333' : '#ddd', 
+  });
+
+  const aspectRatio = baseWidth / baseHeight;
+  shortcutWindow.setAspectRatio(aspectRatio);    
     // ESCキーで閉じられるようにする
     shortcutWindow.webContents.on('before-input-event', (event, input) => {
         if (input.key === 'Escape') {
@@ -613,26 +740,27 @@ function toggleShortcutWindow() {
       shortcutWindow.loadFile(join(__dirname, '../renderer/shortcut.html'));
     }
 
-    shortcutWindow.on('ready-to-show', () => shortcutWindow?.show());
-  }
+  shortcutWindow.webContents.once('did-finish-load', () => {
+      if (process.platform === 'darwin') { // もしmacOSなら
+        const css = `.mac-only { display: inline !important; }`;
+        shortcutWindow?.webContents.insertCSS(css);
+      }
+      setTimeout(() => {
+          if (shortcutWindow && !shortcutWindow.isDestroyed()) {
+              shortcutWindow.show();
+          }
+      }, 50); 
+  });
 }
 
 function toggleSettingsWindow() {
-  if (shortcutWindow && !shortcutWindow.isDestroyed()) {
-    shortcutWindow.close();
-  }  
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.close();
-  }  
-  if (exportWindow && !exportWindow.isDestroyed()) {
-    exportWindow.close();   
   } else {
-    // ★ 親ウィンドウ（メインウィンドウ）を取得
-    const parentWindow = BrowserWindow.getAllWindows().find(w => w.isVisible());
-    if (!parentWindow) return; // 親がいなければ開かない
-
-
-
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        dialog.showErrorBox('Error', 'Cannot open this window without a main window.'); 
+        return;
+    }
     settingsWindow = new BrowserWindow({
       // ★ 親の高さに合わせ、幅は少し狭くする
       minWidth:540,
@@ -640,7 +768,7 @@ function toggleSettingsWindow() {
       width: 540,
       height: 680, 
       title: 'Settings',
-      parent: parentWindow, // 親を指定
+      parent: mainWindow, // 親を指定
       modal: false,
       frame: false,
       show: false,
@@ -678,7 +806,276 @@ function toggleSettingsWindow() {
   }
 }
 
+function createIdeaProcessorWindow() {
+  // --- 自身のトグル制御 ---
+  // もし既にアイデアプロセッサウィンドウが開いていたら、閉じるだけ
+  if (ideaProcessorWindow && !ideaProcessorWindow.isDestroyed()) {
+    ideaProcessorWindow.close();
+    return; // ここで処理を終了
+  }
+  
+  resetIPHistory();
 
+  // --- ウィンドウの生成 ---
+  // const parentWindow = BrowserWindow.getAllWindows().find(w => w.isVisible() && !w.isMinimized());
+  // if (!parentWindow) return;
+  const savedBounds = store.get('ideaProcessorWindow.bounds');
+  const wasMaximized = store.get('ideaProcessorWindow.isMaximized', false);
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        dialog.showErrorBox('Error', 'Cannot open this window without a main window.'); 
+        return;
+    }
+  const isParentFullscreen = mainWindow.isFullScreen();
+  const isAlwaysOnTop = store.get('isIpAlwaysOnTop', true);
+  ideaProcessorWindow = new BrowserWindow({
+    ...(savedBounds || { width: 960, height: 720 }),
+    minWidth: 640,
+    minHeight: 480,
+    title: 'Idea Processor',
+    parent: isMac ? mainWindow : undefined,
+    alwaysOnTop: isAlwaysOnTop,
+    modal: false, 
+    frame: false,
+    fullscreenable: false,
+
+    show: false,
+    transparent: true,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'), // 既存のpreloadを共有
+      sandbox: false,
+      contextIsolation: true
+    }
+  });
+
+  // ★★★ (macOS限定の追加対策) フルスクリーン時の挙動を制御 ★★★
+  //     もし親がフルスクリーンなら、子ウィンドウが同じ空間に参加しないようにする
+  if (process.platform === 'darwin' && isParentFullscreen) {
+    ideaProcessorWindow.setWindowButtonVisibility(false); // 信号機を一旦隠す
+  }  
+
+  // ウィンドウの準備ができたら、初期化データを送る
+  ideaProcessorWindow.webContents.once('did-finish-load', async () => {
+      
+    // a) `electron-store`から現在の設定を取得
+    const isDarkMode = store.get('isDarkMode', false);
+
+    const savedZoom = store.get('ideaProcessorWindow.zoom', { 
+      scale: 1,                          // デフォルトのスケールは 1
+      position: { x: 0, y: 0 }           // デフォルトの位置は (0, 0)
+    });
+    // b) 前回開いていたファイルパスを取得 (なければnull)
+    const lastOpenedFile = store.get('lastOpenedIdeaFile', null);
+
+    let dataToLoad = null;
+    if (lastOpenedFile) {
+        try {
+            // parseMrsdFile を await で呼び出し、結果を待つ
+            const parsedData = await parseMrsdFile(lastOpenedFile);
+            if (parsedData) {
+                dataToLoad = parsedData;
+            } else {
+                // parseMrsdFileがnullを返した場合（＝ファイルはあるが中身が不正）
+                throw new Error('Invalid file format.');
+            }
+        } catch (error: any) {
+            // ファイルが存在しない、またはパースに失敗した場合
+            console.error(`Failed to load last opened file: ${lastOpenedFile}`, error);
+            // ユーザーにエラーを通知
+            dialog.showErrorBox('File Load Error', `前回終了時のファイル'${basename(lastOpenedFile)}'を開けませんでした。新規ファイルで起動します。\n\nエラー: ${error.message}`);
+            // 次回からこのファイルを開かないように、ストアをクリア
+            store.set('lastOpenedIdeaFile', null);
+            dataToLoad = null;
+        }
+    }
+
+    // c) 初期化データをまとめる
+    const initialData = {
+      theme: isDarkMode ? 'dark' : 'light',
+      zoomState: savedZoom,
+      filePathToLoad: dataToLoad ? lastOpenedFile : null
+    };
+    setTimeout(() => {
+      if (wasMaximized && ideaProcessorWindow) {
+    ideaProcessorWindow.maximize();
+  }  
+    },50);
+    // d) 'initialize-idea-processor'チャンネルでデータを送信
+   if (!initialData.filePathToLoad) {
+      
+  }
+    ideaProcessorWindow?.webContents.send('initialize-idea-processor', initialData);
+  });
+
+  // ★ ESCキーでのクローズは不要かもしれないので、一旦コメントアウト
+  //    テキスト入力中に誤って閉じてしまう可能性があるため
+  /*
+  ideaProcessorWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.key === 'Escape') {
+          ideaProcessorWindow?.close();
+          event.preventDefault();
+      }
+  });
+  */
+
+  if (isMac){
+    if(isAlwaysOnTop) {
+    ideaProcessorWindow.setParentWindow(mainWindow);
+  } else {
+    ideaProcessorWindow.setParentWindow(null);
+  }
+}
+
+ideaProcessorWindow.on('close', (e) => {
+  if (ideaProcessorWindow && !ideaProcessorWindow.isDestroyed()) {
+    e.preventDefault(); // まず閉じるのをキャンセル
+    // レンダラーに終了準備をお願いする
+    ideaProcessorWindow.webContents.send('please-prepare-to-close');
+  }
+});
+
+ipcMain.once('ready-to-close', (_event, canClose: boolean, zoomState: any, nextFilePath?: string | null) => {
+  // 終了が許可された場合のみ、状態を保存する
+  if (canClose) {
+    if (ideaProcessorWindow && !ideaProcessorWindow.isDestroyed()) {
+      const isMaximized = ideaProcessorWindow.isMaximized();
+      store.set('ideaProcessorWindow.isMaximized', isMaximized);
+      store.set('ideaProcessorWindow.zoom', zoomState);
+      if (!isMaximized) {
+        store.set('ideaProcessorWindow.bounds', ideaProcessorWindow.getBounds());
+      }
+      // rendererから渡された、次に開くべき正しいファイルパスを保存する
+      // (もし破棄されたら、nextFilePathはnullになり、ストアもnullで更新される)
+      store.set('lastOpenedIdeaFile', nextFilePath);
+      ideaProcessorWindow.destroy();
+    }
+  }
+});
+
+ideaProcessorWindow.on('closed', () => {
+  ideaProcessorWindow = null;
+});
+  
+  // --- コンテンツのロード ---
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
+  if (is.dev && rendererUrl) {
+    // ★ 読み込むHTMLを`idea-processor.html`に変更
+    ideaProcessorWindow.loadURL(`${rendererUrl}/idea-processor.html`);
+  } else {
+    ideaProcessorWindow.loadFile(join(__dirname, '../renderer/idea-processor.html'));
+  }
+
+  // ideaProcessorWindow.on('ready-to-show', () => {
+  //   ideaProcessorWindow?.show();
+  // });
+  // a) `renderer`からの「描画準備完了」の合図を、一度だけ待つ
+  ipcMain.once('renderer-is-ready', () => {
+      const isAlwaysOnTop = store.get('isIpAlwaysOnTop', true);
+      ideaProcessorWindow?.webContents.send('ip-always-on-top-changed', isAlwaysOnTop);    
+    // b) 合図が来たら、ウィンドウを表示する
+    setTimeout(() => {
+    if (ideaProcessorWindow && !ideaProcessorWindow.isDestroyed()) {      
+      ideaProcessorWindow.show();      
+    }
+    }, 50);
+  });  
+}
+
+// ファイルを開いてパースし、データを返すだけのヘルパー関数
+async function parseMrsdFile(filePath: string) {  
+  try {
+    // 1. AdmZipでファイル（バッファ）を読み込む
+    const zip = new AdmZip(filePath);
+    
+    // 2. canvas.jsonを読み込んでパースする
+    const canvasJsonEntry = zip.getEntry('canvas.json');
+    if (!canvasJsonEntry) throw new Error('canvas.jsonが見つかりません。');
+    const canvasData = JSON.parse(canvasJsonEntry.getData().toString('utf8'));
+
+    // 3. 各ノードの本文データを読み込む
+    if (canvasData.nodes && Array.isArray(canvasData.nodes)) {
+      for (const node of canvasData.nodes) {
+        if (node.type === 'file' && node.file) {
+          const contentEntry = zip.getEntry(node.file);
+          // ★ 本文データをノードオブジェクトに直接追加する
+          node.contentText = contentEntry ? contentEntry.getData().toString('utf8') : '';
+        }
+      }
+    }
+    const cleanData = JSON.parse(JSON.stringify(canvasData));
+  return cleanData; // パースしたデータを返す
+  } catch (error) {
+    console.error('ファイルの読み込みに失敗しました:${filePath}', error);
+    throw error;
+  }
+}
+
+async function handleOpenIdeaProcessorFile() {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    title: 'アイデアプロセッサファイルを開く',
+    filters: [
+      { name: 'MirrorShard Canvas', extensions: ['mrsd'] }
+    ],
+    properties: ['openFile']
+  });
+
+  if (canceled || filePaths.length === 0) {
+    return;
+  }
+
+  const filePath = filePaths[0];
+  resetIPHistory();
+  
+  try {
+    // 1. AdmZipでファイル（バッファ）を読み込む
+    const zip = new AdmZip(filePath);
+    
+    // 2. canvas.jsonを読み込んでパースする
+    const canvasJsonEntry = zip.getEntry('canvas.json');
+    if (!canvasJsonEntry) throw new Error('canvas.jsonが見つかりません。');
+    const canvasData = JSON.parse(canvasJsonEntry.getData().toString('utf8'));
+
+    // 3. 各ノードの本文データを読み込む
+    if (canvasData.nodes && Array.isArray(canvasData.nodes)) {
+      for (const node of canvasData.nodes) {
+        if (node.type === 'file' && node.file) {
+          const contentEntry = zip.getEntry(node.file);
+          // ★ 本文データをノードオブジェクトに直接追加する
+          node.contentText = contentEntry ? contentEntry.getData().toString('utf8') : '';
+        }
+      }
+    }
+    const cleanData = JSON.parse(JSON.stringify(canvasData));
+    
+    if (!ideaProcessorWindow || ideaProcessorWindow.isDestroyed()) {
+      return;
+    }
+    // ★ 確実に存在するウィンドウを取得し、フォーカスを当てる
+    const targetWindow = ideaProcessorWindow!; // `!` を付けて、存在することを明示
+    if (targetWindow.isMinimized()) targetWindow.restore();
+    targetWindow.focus();    
+    store.set('lastOpenedIdeaFile', filePath);
+
+    // 5. ウィンドウが表示されたら、パースしたデータを送信する
+  if (targetWindow.webContents.isLoading()) {
+    targetWindow.webContents.once('did-finish-load', () => {
+      targetWindow.webContents.send('load-data', { filePath: filePath, data: cleanData });
+    });
+  } else {
+    // 既にロード済みなら、即座に送信
+    targetWindow.webContents.send('load-data', { filePath: filePath, data: cleanData });
+  }
+
+  } catch (error) {
+    console.error('ファイルの読み込みに失敗しました:', error);
+  let errorMessage = '不明なエラーが発生しました。';
+  if (error instanceof Error) {
+    errorMessage = error.message;
+  } else if (typeof error === 'string') {
+    errorMessage = error;
+  }    
+    dialog.showErrorBox('読み込み失敗', `ファイルの読み込み中にエラーが発生しました。\n\n${errorMessage}`);
+  }
+}
 
 function openFileInWindow(filePath: string): void {
   addToHistory(filePath);
@@ -696,11 +1093,14 @@ function openFileInWindow(filePath: string): void {
 function createWindow(filePath?: string | null): void {
   ensureUserResources();
   const savedBounds = store.get('windowBounds');
+  const wasFullscreen = store.get('isFullscreen', false);
+  const isDarkMode = store.get('isDarkMode', false);
   const mainWindowOptions: Electron.BrowserWindowConstructorOptions = {
   ...(savedBounds || { width: 900, height: 670 }),
   minWidth: 640,
   minHeight: 480,  
-  show: true,
+    show: false,
+    backgroundColor: isDarkMode ? '#333333' : '#dddddd',
   icon: iconPath,
   autoHideMenuBar: true,
   ...(process.platform === 'linux' ? { icon: iconPath } : {}), 
@@ -719,29 +1119,31 @@ function createWindow(filePath?: string | null): void {
     mainWindowOptions.icon = iconPath; 
   }
 
-  // ★★★ 1. show: false に戻す ★★★
-  mainWindowOptions.show = false; 
+ mainWindow = new BrowserWindow(mainWindowOptions);  
 
-  // ★★★ 2. 背景色を指定して、OSの白い枠のチラつきを防ぐ ★★★
-  mainWindowOptions.backgroundColor = '#444444'; // ダークモードの背景色に合わせておく
+  ipcMain.once('renderer-ready', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
 
-const mainWindow = new BrowserWindow(mainWindowOptions);  
-
-  // ウィンドウが移動/リサイズされたら、"debounce"して保存する
-  let saveBoundsTimeout: NodeJS.Timeout;
-  const saveBounds = () => {
-    if (!mainWindow.isDestroyed()) {
-      store.set('windowBounds', mainWindow.getBounds());
-    }
-  };
-  mainWindow.on('resize', () => { clearTimeout(saveBoundsTimeout); saveBoundsTimeout = setTimeout(saveBounds, 1000); });
-  mainWindow.on('move', () => { clearTimeout(saveBoundsTimeout); saveBoundsTimeout = setTimeout(saveBounds, 1000); });
-
-  mainWindow.webContents.on('did-finish-load', () => {
+    // a) 起動時に開くべきファイルがあれば、それをrendererに伝える
+    //    (このタイミングで送ることで、表示前の処理が確実になる)
     if (filePath) {
-      mainWindow.webContents.send('open-file', filePath)
+      mainWindow.webContents.send('open-file', filePath);
     }
-  })
+    
+    // b) もし前回がフルスクリーンだったら、フルスクリーンにする
+    if (wasFullscreen) {
+      mainWindow.setFullScreen(true);
+    }
+    
+    // c) すべての準備が整った、まさにその瞬間に、ウィンドウを表示する
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
+    mainWindow.on('closed', () => {
+      mainWindow = null;
+    });  
+
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -834,8 +1236,18 @@ async function scanSystemFontsInternal(): Promise<{ family: string; path: string
   }
 }
 
+function sanitizeFileName(name: string): string {
+  // Windows/macOS/Linuxで共通して使えない文字や、パス区切り文字を置換
+  return name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'Untitled';
+}
+
 // --- [エリア 3: IPCハンドラ] ---
 function setupIpcHandlers(): void {
+
+// ★ デバッグ専用のIPCハンドラを追加
+ipcMain.on('debug-log', (_event, ...args) => {
+  console.log('[Renderer-Debug]', ...args);
+});  
 
   // --- ファイル操作 ---
   ipcMain.handle('dialog:openFile', async () => {
@@ -958,6 +1370,302 @@ ipcMain.handle('file:saveFile', async (
   }
 });
 
+ipcMain.handle('idea:openFile', handleOpenIdeaProcessorFile);
+
+ipcMain.handle('idea:saveFile', async (_event, filePath, saveData) => {
+  let finalPath = filePath;
+
+  // 1. ファイル選択ダイアログのフィルタを `.mrsd` に変更
+  if (!finalPath) {
+    const { canceled, filePath: newFilePath } = await dialog.showSaveDialog({
+      title: 'アイデアプロセッサファイルを保存',
+      defaultPath: 'untitled.mrsd',
+      filters: [
+        { name: 'MirrorShard Canvas', extensions: ['mrsd'] }, // ★ 拡張子を変更
+      ]
+    });
+    if (canceled || !newFilePath) {
+      return { success: false, cancelled: true };
+    }
+    finalPath = newFilePath;
+  }
+
+  const tempFilePath = `${finalPath}.${Date.now()}-${Math.random().toString(36).substring(2)}.tmp`;
+
+  // 2. AdmZipを使って、ZIPアーカイブを生成する
+  try {
+    let existingCreatedAt: string | null = null;
+
+    // ★ もし既存ファイルを上書き保存する場合...
+    if (finalPath && existsSync(finalPath)) {
+      try {
+        const zip = new AdmZip(finalPath);
+        const canvasJsonEntry = zip.getEntry('canvas.json');
+        if (canvasJsonEntry) {
+          const canvasData = JSON.parse(canvasJsonEntry.getData().toString('utf8'));
+          // ★ 既存の作成日時を読み取って保持しておく
+          if (canvasData.metadata && canvasData.metadata.createdAt) {
+            existingCreatedAt = canvasData.metadata.createdAt;
+          }
+        }
+      } catch (e) {
+        // 読み込みに失敗しても、処理は続行（新しい日時が生成される）
+        console.warn('既存の .mrsd ファイルの読み取りに失敗しました:', e);
+      }
+    }
+
+    const zip = new AdmZip();
+
+    // ★ 型定義を使って、canvasDataの型を明確にする
+    const canvasData: {
+      nodes: CanvasNode[]; // ★ ここで「CanvasNodeの配列です」と教える
+      edges: any[]; 
+      groups: CanvasGroup[];
+      metadata: any;
+    } = {
+      nodes: [], // これで、この配列はCanvasNode[]型だと認識される
+      edges: (saveData.links || []).map(link => ({ 
+        id: link.id, // ★ `edge_...`で再生成しない！
+        fromNode: link.from,
+        toNode: link.to,
+        label: link.label,
+        type: link.type,
+      })),
+      groups: saveData.groups || [],
+      metadata: {
+      createdAt: existingCreatedAt || new Date().toISOString(), // ★ 存在すれば再利用、なければ新規作成
+      updatedAt: new Date().toISOString() // 更新日時も追加すると便利
+      }
+    };
+    
+    // 1. 各ノードの本文を、独立したファイルとしてZipに追加する
+    // files/ フォルダ内のファイル名の重複を避けるためのセット
+    const usedFileNames = new Set<string>();    
+    for (const node of saveData.nodes) {
+
+      let baseName = sanitizeFileName(node.title);
+      let finalName = `${baseName}.md`;
+      
+      // ★ 重複チェック
+      let counter = 1;
+      while (usedFileNames.has(finalName)) {
+        finalName = `${baseName} (${counter}).md`;
+        counter++;
+      }
+      usedFileNames.add(finalName);
+
+      // 本文をBufferに変換して、`files/`フォルダ内に追加
+      zip.addFile(`files/${finalName}`, Buffer.from(node.contentText || '', 'utf8'));
+
+      // 2. `canvas.json`に格納するノード情報からは、重い本文データを除く
+      //    代わりに、どのファイルを参照するかという情報(`file`)を追加
+      canvasData.nodes.push({
+        id: node.id,
+        type: 'file', // Obsidianライクなtype
+        file: `files/${finalName}`, // ★ ファイルへの参照
+        x: node.x,
+        y: node.y,
+        width: node.width,
+        height: node.height,
+        title: node.title, // ★ タイトルはcanvas.jsonにも入れておくとプレビュー等で便利
+        parentId: node.parentId || null
+      });
+    }
+    
+    // 3. 全ての情報をまとめた`canvas.json`をZipに追加する
+    const canvasJsonString = JSON.stringify(canvasData, null, 2);
+    zip.addFile('canvas.json', Buffer.from(canvasJsonString, 'utf8'));
+
+    // 4. ★ `writeZip`ではなく、`toBuffer()`でメモリ上にZipデータを作成
+    const bufferToWrite = zip.toBuffer();
+
+
+
+    // 6. ★ 一時ファイルに、バッファを書き込む
+    await fsPromises.writeFile(tempFilePath, bufferToWrite);
+
+    // 7. ★ リネームで、元のファイルをアトミックに上書き
+    await fsPromises.rename(tempFilePath, finalPath);
+    
+    // 8. 成功後の処理 (ストアへの保存など)
+    store.set('lastOpenedIdeaFile', finalPath);
+    return { success: true, path: finalPath };
+
+  } catch (e: any) {
+    console.error(`Failed to save file atomically: ${finalPath}`, e);
+    dialog.showErrorBox('保存失敗', `ファイルの保存中にエラーが発生しました。\n\n${e.message}`);
+    
+    try {
+      if (existsSync(tempFilePath)) {
+        await fsPromises.unlink(tempFilePath);
+      }
+    } catch (cleanupError) {
+      console.error('Failed to clean up temporary save file:', cleanupError);
+    }
+
+    return { success: false, cancelled: false, error: e.message };
+  }
+});
+
+  // アイデアプロセッサのエクスポート機能
+
+  ipcMain.on('export-as-markdown', async (_event, content: string, currentPath: string | null) => {
+      const path = require('path');
+      
+      const defaultName = currentPath
+          ? path.basename(currentPath, path.extname(currentPath)) + '.md'
+          : 'Untitled.md';
+
+      const { canceled, filePath } = await dialog.showSaveDialog({
+          title: 'Export as Markdown',
+          defaultPath: defaultName,
+          filters: [{ name: 'Markdown', extensions: ['md'] }]
+      });
+
+      if (!canceled && filePath) {
+          try {
+              await fsPromises.writeFile(filePath, content, 'utf-8');
+              shell.showItemInFolder(filePath);
+          } catch (e: any) {
+              dialog.showErrorBox('Export Failed', e.message);
+          }
+      }
+  });
+
+  ipcMain.on('send-markdown-to-editor', async (_event, content: string) => {
+      try {
+          // 1. 一時ファイルにマークダウンを書き出す
+          const tempDir = app.getPath('temp');
+          const tempFilePath = join(tempDir, `From_IP.md`);
+          await fsPromises.writeFile(tempFilePath, content, 'utf-8');
+
+          // 2. メインのエディタウィンドウを探す
+          const mainWindow = BrowserWindow.getAllWindows().find(win => 
+              win !== previewWindow && win !== ideaProcessorWindow // 他のサブウィンドウではない
+          );
+
+          if (mainWindow) {
+              // 3. メインウィンドウに「このファイルを開け」と命令する
+              mainWindow.webContents.send('open-file', tempFilePath, true);
+              mainWindow.focus();
+          } else {
+              // メインウィンドウが見つからない場合はエラー
+              dialog.showErrorBox('Error', 'Main editor window not found.');
+          }
+      } catch (e: any) {
+          dialog.showErrorBox('Send to Editor Failed', e.message);
+      }
+  });  
+
+  ipcMain.on('export-as-image', async (_event, dataUrl: string, format: 'png' | 'jpeg', currentPath: string | null) => {
+      const defaultName = currentPath
+          ? basename(currentPath, extname(currentPath)) + `.${format}`
+          : `canvas.${format}`;
+
+      const { canceled, filePath } = await dialog.showSaveDialog({
+          title: `Export as ${format.toUpperCase()}`,
+          defaultPath: defaultName,
+          filters: [{ name: `${format.toUpperCase()} Image`, extensions: [format] }]
+      });
+
+      if (!canceled && filePath) {
+          try {
+              // Data URLから 'data:image/png;base64,' のようなヘッダ部分を取り除く
+              const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+              // Base64をBufferにデコード
+              const buffer = Buffer.from(base64Data, 'base64');
+              // ファイルに書き込む
+              await fsPromises.writeFile(filePath, buffer);
+              shell.showItemInFolder(filePath);
+          } catch (e: any) {
+              dialog.showErrorBox('Image Export Failed', e.message);
+          }
+      }
+  });  
+
+  ipcMain.on('export-as-pdf', async (_event, dataUrl: string, currentPath: string | null) => {
+      const defaultName = currentPath
+          ? basename(currentPath, extname(currentPath)) + '.pdf'
+          : 'canvas.pdf';
+
+      const { canceled, filePath } = await dialog.showSaveDialog({
+          title: 'Export as PDF',
+          defaultPath: defaultName,
+          filters: [{ name: 'PDF Document', extensions: ['pdf'] }]
+      });
+
+      if (!canceled && filePath) {
+          // 1. 非表示のウィンドウを一時的に作成
+          const pdfWindow = new BrowserWindow({ show: false });
+          try {
+              // 2. 画像だけを表示するシンプルなHTMLをロード
+              await pdfWindow.loadURL(`data:text/html,
+                  <body style="margin:0;"><img src="${dataUrl}" style="width:100%;"></body>`);
+              
+              // 3. PDFとして印刷（A4横向き、マージンなしを推奨）
+              const pdfData = await pdfWindow.webContents.printToPDF({
+                  landscape: true,
+                  margins: { top: 0, bottom: 0, left: 0, right: 0 } ,
+                  printBackground: true,
+              });
+
+              // 4. ファイルに書き込む
+              await fsPromises.writeFile(filePath, pdfData);
+              shell.showItemInFolder(filePath);
+          } catch (e: any) {
+              dialog.showErrorBox('PDF Export Failed', e.message);
+          } finally {
+              // 5. 必ずウィンドウを閉じる
+              pdfWindow.close();
+          }
+      }
+  });  
+
+ipcMain.on('export-as-html', async (_event, dataUrl: string, currentPath: string | null) => {
+    // 1. デフォルトのファイル名を決定
+    const defaultName = currentPath
+        ? basename(currentPath, extname(currentPath)) + '.html'
+        : 'canvas.html';
+
+    // 2. 保存ダイアログを表示
+    const { canceled, filePath } = await dialog.showSaveDialog({
+        title: 'Export as HTML',
+        defaultPath: defaultName,
+        filters: [{ name: 'HTML Document', extensions: ['html'] }]
+    });
+
+    if (!canceled && filePath) {
+        // 3. テーマに応じた背景色を決定
+        const isDarkMode = store.get('isDarkMode', false);
+        const bgColor = isDarkMode ? '#333333' : 'antiquewhite';
+
+        // 4. HTMLコンテンツを生成
+        const htmlContent = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exported Canvas</title>
+  <style>
+    body { margin: 0; background-color: ${bgColor}; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
+    img { max-width: 100%; height: auto; display: block; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+  </style>
+</head>
+<body>
+  <img src="${dataUrl}" alt="Exported Canvas Image">
+</body>
+</html>`;
+
+        // 5. ファイルに書き込み、フォルダを開く
+        try {
+            await fsPromises.writeFile(filePath, htmlContent, 'utf-8');
+            shell.showItemInFolder(filePath);
+        } catch (e: any) {
+            dialog.showErrorBox('HTML Export Failed', e.message);
+        }
+    }
+});
+
   ipcMain.on('add-to-history', (_event, filePath: string) => { addToHistory(filePath); buildMenu(); });
   ipcMain.on('files-dropped', (_event, filePaths: string[]) => { filePaths.forEach(openFileInWindow); });
   ipcMain.on('session-save', (_event, filePaths: string[]) => {
@@ -973,25 +1681,21 @@ ipcMain.handle('file:saveFile', async (
   }
 });
 
-  // --- ウィンドウ操作 ---
-  ipcMain.on('quit-app', () => app.quit());
-  ipcMain.on('window-minimize', () => BrowserWindow.getFocusedWindow()?.minimize());
-  ipcMain.on('window-toggle-fullscreen', () => {
-    const window = BrowserWindow.getFocusedWindow();
-    if (!window) return;  
-    // 1. もし、OSがLinuxで、かつ、対象がプレビューウィンドウなら...
-    if (process.platform === 'linux' && window === previewWindow) {    
-      // a. フルスクリーンではなく、"最大化"をトグルする
-      if (window.isMaximized()) {
-        window.unmaximize();
-      } else {
-        window.maximize();
-      }    
-    } else {
-      // 2. それ以外のOS、またはメインウィンドウなら、これまで通りフルスクリーンをトグルする
-      window.setFullScreen(!window.isFullScreen());
+  // アイデアプロセッサウィンドウの位置とサイズをリセット
+  ipcMain.on('reset-ip-window', () => {
+    if (ideaProcessorWindow && !ideaProcessorWindow.isDestroyed()) {
+      // 1. デフォルトのサイズに戻す
+      ideaProcessorWindow.setSize(960, 720);
+      // 2. 画面の中央に移動する
+      ideaProcessorWindow.center();
     }
   });
+
+  // --- ウィンドウ操作 ---
+  ipcMain.on('quit-app', () => app.quit());
+
+  ipcMain.on('window-minimize', () => BrowserWindow.getFocusedWindow()?.minimize());
+
   ipcMain.on('window-close', () => app.quit());
 
   // --- プレビューウィンドウ ---
@@ -1003,27 +1707,45 @@ ipcMain.handle('file:saveFile', async (
   const parentWindow = BrowserWindow.fromWebContents(ipcEvent.sender);
   const savedBounds = store.get('previewBounds');
   const savedIsFullscreen = store.get('previewIsFullscreen', false);
+  const isAlwaysOnTop = store.get('isPreviewAlwaysOnTop', true);
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        dialog.showErrorBox('Error', 'Cannot open this window without a main window.'); 
+        return;
+    }  
   previewWindow = new BrowserWindow({
     ...(savedBounds || { width: 800, height: 600 }),
-  minWidth: 480,
-  minHeight: 320,      
-    parent: parentWindow || undefined, 
+    minWidth: 480,
+    minHeight: 320,      
+    parent: isMac ? mainWindow : undefined,
+    alwaysOnTop: isAlwaysOnTop,
+    fullscreenable: false,
     show: false, 
     frame: false,
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false }
   });
+
   if (savedIsFullscreen) {
-  previewWindow.setFullScreen(true);
+    previewWindow.setFullScreen(true);
+  previewWindow.maximize();
 }
+
+  if (isMac){
+    if(isAlwaysOnTop) {
+      previewWindow.setParentWindow(mainWindow);
+    } else {
+      previewWindow.setParentWindow(null);
+    }
+  }
+
   previewWindow.on('ready-to-show', () => previewWindow?.show());
   previewWindow.on('close', () => {
   if (previewWindow && !previewWindow.isDestroyed()) {
     // ★ フルスクリーン状態を取得して保存
-    const isFullscreen = previewWindow.isFullScreen();
-    store.set('previewIsFullscreen', isFullscreen);
+    const isMaximized = previewWindow.isMaximized();
+    store.set('previewIsFullscreen', isMaximized);
     // フルスクリーン状態では、正しいウィンドウサイズが取得できないことがあるので、
     // フルスクリーンでない場合のみ、サイズを保存する
-    if (!isFullscreen) {
+    if (!isMaximized) {
       const bounds = previewWindow.getBounds();
       store.set('previewBounds', bounds);
       console.log('Preview bounds saved:', bounds);
@@ -1082,6 +1804,7 @@ ipcMain.handle('file:saveFile', async (
     });
   });
   ipcMain.on('toggle-preview-window', () => { previewWindow?.close(); });
+  ipcMain.on('toggle-ip-window', () => { ideaProcessorWindow?.close(); });
   ipcMain.on('update-preview', (_event, data) => { previewWindow?.webContents.send('update-preview-content', data); });
   ipcMain.on('notify-preview-closed', (event) => {
     BrowserWindow.getAllWindows().forEach(win => {
@@ -1204,19 +1927,15 @@ ipcMain.on('interop-message', (_event, message) => {
 
 
 ipcMain.on('open-export-window', (_event, filePath: string) => {
-  // 排他制御
-  if (shortcutWindow && !shortcutWindow.isDestroyed()) {
-    shortcutWindow.close();
-  }  
-  if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.close();
-  }  
   if (exportWindow && !exportWindow.isDestroyed()) {
-    exportWindow.close();    
-  }
-  
+    exportWindow.close();   
+    return;
+  }  
   const mainWindow = BrowserWindow.getFocusedWindow();
-
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        dialog.showErrorBox('Error', 'Cannot open this window without a main window.'); 
+        return;
+    }
   exportWindow = new BrowserWindow({
     width: 520,
     height: 700,
@@ -1571,6 +2290,7 @@ ipcMain.on('apply-system-font', (_event, font: { path: string; family: string })
   });  
 
   ipcMain.on('toggle-settings-window', toggleSettingsWindow);
+  ipcMain.on('toggle-IP-window', createIdeaProcessorWindow);
   
   ipcMain.handle('get-bg-list', async () => {
     try {
@@ -1675,7 +2395,7 @@ ipcMain.on('apply-system-font', (_event, font: { path: string; family: string })
   
   // --- 右クリックメニュー ---
   ipcMain.handle('get-recent-files', async () => {
-    const history = loadHistory(); // SnowEditorの履歴管理関数
+    const history = loadHistory(); 
     // basenameとpathの両方を送る
     return history.map(p => ({ path: p, basename: basename(p) }));
   });
@@ -1701,6 +2421,8 @@ ipcMain.on('apply-system-font', (_event, font: { path: string; family: string })
               }};
           case 'open-file':
             return { ...item, click: () => senderWindow.webContents.send('trigger-open-file') };
+          case 'import-scrivener':
+            return { ...item, click: () => senderWindow.webContents.send('context-menu-command', 'import-scrivener') };            
           case 'save-file':
             return { ...item, click: () => senderWindow.webContents.send('trigger-save-file') };
           case 'save-as-file':
@@ -1791,6 +2513,231 @@ ipcMain.handle('confirm-save-with-encoding-warning', async (event, fileName: str
 
   // --- 降雪エフェクト ---
   ipcMain.on('toggle-preview-snow', () => { previewWindow?.webContents.send('trigger-snow-toggle'); });
+
+
+ipcMain.handle('idea:openFileByPath', async (event, filePath: string) => {
+  await resetIPHistory();
+  await fsPromises.rm(autoSaveDir, { recursive: true, force: true }).catch(() => {});
+  const data = await parseMrsdFile(filePath);
+  if (data) {
+    event.sender.send('load-data', { filePath, data });
+  } 
+  else {
+    if (ideaProcessorWindow && !ideaProcessorWindow.isDestroyed()) {
+      _createNewUntitledFile(ideaProcessorWindow.webContents);
+    } 
+  }
+  return { success: true };
+});
+
+ipcMain.handle('import-from-scrivener', async (_event) => {
+    // 1. ユーザーに .scriv プロジェクトフォルダを選択させる
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+        title: 'Select Scrivener Project Folder',
+        properties: ['openDirectory']
+    });
+    if (canceled || filePaths.length === 0) return null;
+    
+    const projectPath = filePaths[0];
+    const projectName = basename(projectPath, '.scriv');
+    const scrivxPath = join(projectPath, `${projectName}.scrivx`);
+    const searchIndexesPath = join(projectPath, 'Files', 'search.indexes');
+
+    if (!existsSync(scrivxPath) || !existsSync(searchIndexesPath)) {
+        dialog.showErrorBox('Invalid Project', '.scrivx or search.indexes file not found.');
+        return null;
+    }
+
+    try {
+        // 2. XMLファイルを読み込み、パースする
+        const convert = require('xml-js');
+        const scrivxXml = await fsPromises.readFile(scrivxPath, 'utf-8');
+        const searchXml = await fsPromises.readFile(searchIndexesPath, 'utf-8');
+
+        const scrivxJs = convert.xml2js(scrivxXml, { compact: true });
+        const searchJs = convert.xml2js(searchXml, { compact: true });
+        
+        // 3. search.indexes の内容を、IDをキーにしたMapに変換して高速化
+        const contentMap = new Map<string, { title: string, synopsis?: string, text?: string }>();
+        const documents = searchJs.SearchIndexes?.Documents?.Document;
+        if (documents) {
+            (Array.isArray(documents) ? documents : [documents]).forEach(doc => {
+                if (doc?._attributes?.ID) {
+                    contentMap.set(doc._attributes.ID, {
+                        title: doc.Title?._text || '',
+                        synopsis: doc.Synopsis?._text,
+                        text: doc.Text?._text
+                    });
+                }
+            });
+        }
+        console.log("search.indexes loaded.");
+
+        // 4. scrivx の階層を再帰的にたどり、マークダウンを生成
+        let markdownContent = '';
+        const traverseBinder = (item: any, level: number) => {
+          if (!item?._attributes?.UUID) return;
+            const uuid = item._attributes.UUID;
+            const itemContent = contentMap.get(uuid);
+            const title = item.Title?._text || itemContent?.title || 'Untitled';
+            
+            // ゴミ箱やリサーチフォルダは無視
+            if (item._attributes.Type === 'TrashFolder' || item._attributes.Type === 'ResearchFolder') {
+                return;
+            }
+
+            markdownContent += `${'#'.repeat(level)} ${title}\n\n`;
+
+            if (itemContent) {
+                if (itemContent.synopsis) {
+                    markdownContent += `Synopsis: ${itemContent.synopsis}\n\n`;
+                }
+                if (itemContent.text) {
+                    markdownContent += `${itemContent.text}\n\n`;
+                }
+            }
+
+            // 子要素があれば、再帰的に処理
+            if (item.Children?.BinderItem) {
+                const children = item.Children.BinderItem;
+                (Array.isArray(children) ? children : [children]).forEach(child => {
+                    traverseBinder(child, level + 1);
+                });
+            }
+        };
+
+        const rootItems = scrivxJs.ScrivenerProject?.Binder?.BinderItem;
+        if (rootItems) {
+            (Array.isArray(rootItems) ? rootItems : [rootItems]).forEach(item => {
+                traverseBinder(item, 1);
+            });
+        }
+
+        // 5. 生成したマークダウンを renderer に返す
+        return { title: projectName, content: markdownContent };
+
+    } catch (e: any) {
+        dialog.showErrorBox('Import Failed', e.message);
+        throw new Error(e.message);
+    }
+});
+
+ipcMain.handle('check-for-unsaved-changes', (event) => {
+    // このメッセージを送ってきたrendererに、逆質問する
+    const webContents = event.sender;
+    
+    // rendererからの応答を待つためのPromise
+    return new Promise(resolve => {
+        // 一度だけ応答を待つリスナー
+        ipcMain.once('response-unsaved-changes', (_e, hasChanges: boolean) => {
+            resolve(hasChanges);
+        });
+        // rendererに応答を要求
+        webContents.send('request-unsaved-changes-check');
+    });
+});
+
+ipcMain.handle('confirm-save-dialog', async (event, windowName: string) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return 'cancel';
+
+    const { response } = await dialog.showMessageBox(window, {
+        type: 'question',
+        buttons: ['保存する', '変更を破棄', 'キャンセル'],
+        defaultId: 0,
+        cancelId: 2,
+        title: '未保存の変更',
+        message: `${windowName} に保存されていない変更があります。`,
+    });
+
+    if (response === 0) return 'save';
+    if (response === 1) return 'discard';
+    return 'cancel';
+});
+
+ipcMain.handle('toggle-ip-always-on-top', () => {
+  if (!ideaProcessorWindow || !mainWindow || ideaProcessorWindow.isDestroyed()) {
+    return store.get('isIpAlwaysOnTop', true);
+  }
+  
+  const currentState = store.get('isIpAlwaysOnTop', true);
+  const newState = !currentState;
+
+  if (isMac) {
+    // --- macOS用の、最も確実な実装 ---
+    if (newState) {
+      ideaProcessorWindow.setAlwaysOnTop(true, 'normal');
+      ideaProcessorWindow.setParentWindow(mainWindow);
+      ideaProcessorWindow.focus(); // 念のためフォーカス
+    } else {
+      ideaProcessorWindow.setParentWindow(null);
+      ideaProcessorWindow.setAlwaysOnTop(false);
+      mainWindow.focus();
+    }
+  } else {
+    // --- Windows/Linux用の、フリッカーのない、最もシンプルな実装 ---
+    ideaProcessorWindow.setAlwaysOnTop(newState, 'normal');
+  }
+
+  store.set('isIpAlwaysOnTop', newState);
+  return newState;
+});
+
+ipcMain.handle('toggle-preview-always-on-top', () => {
+  if (!previewWindow || !mainWindow || previewWindow.isDestroyed()) {
+    return store.get('isPreviewAlwaysOnTop', true);
+  }
+  const currentState = store.get('isPreviewAlwaysOnTop', true);
+  const newState = !currentState;
+  
+  if (isMac) {
+    if (newState) {
+      previewWindow.setAlwaysOnTop(true, 'normal');
+      previewWindow.setParentWindow(mainWindow);
+      previewWindow.focus(); 
+    } else {
+      previewWindow.setParentWindow(null);
+      previewWindow.setAlwaysOnTop(false);
+      mainWindow.focus();
+    }
+  } else {
+    previewWindow.setAlwaysOnTop(newState, 'normal');
+  }
+
+  store.set('isPreviewAlwaysOnTop', newState);
+  return newState;
+});
+
+ipcMain.on('request-toggle-fullscreen', (event) => {
+  // ★ このイベントを送ってきたウィンドウを取得
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  if (!senderWindow) return;
+
+  // ★★★ メニューのclickハンドラと、全く同じロジックを実行 ★★★
+  if (senderWindow === ideaProcessorWindow || senderWindow === previewWindow) {
+      // --- サブウィンドウの処理 (最大化) ---
+      if (!senderWindow.isMaximized()) {
+          // 保存してから最大化
+          if (senderWindow === ideaProcessorWindow) {
+              store.set('ideaProcessorWindow.bounds', senderWindow.getBounds());
+          } else if (senderWindow === previewWindow) {
+              store.set('previewBounds', senderWindow.getBounds());
+          }
+          senderWindow.maximize();
+      } else {
+          senderWindow.unmaximize();
+      }
+  } 
+  else { // メインウィンドウの場合
+      // --- メインウィンドウの処理 (フルスクリーン) ---
+      const isCurrentlyFullscreen = senderWindow.isFullScreen();
+      if (!isCurrentlyFullscreen) {
+          store.set('windowBounds', senderWindow.getBounds());
+      }        
+      senderWindow.setFullScreen(!isCurrentlyFullscreen);
+  }
+});
+
 }
 
 // --- [エリア 4: アプリケーションライフサイクル] ---
@@ -1839,6 +2786,82 @@ app.on('open-file', (event, path) => {
     fileToOpenOnStartup = path;
   }
 });
+
+async function _openIdeaProcessorFile(filePathToLoad?: string) {
+  let filePath = filePathToLoad;
+  if (!filePath) {
+    console.log("no path");
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    title: 'アイデアプロセッサファイルを開く',
+    filters: [
+      { name: 'MirrorShard Canvas', extensions: ['mrsd'] }
+    ],
+    properties: ['openFile']
+  });
+    if (canceled || !filePaths.length) return;
+    filePath = filePaths[0];
+  }
+
+  // 1. まず、ファイルをパースしてみる
+  const data = await parseMrsdFile(filePath);
+
+  // 2. ★★★ パースの結果で、処理を分岐する ★★★
+
+  // a) もし、パースに「成功」したら (`data`が存在すれば)...
+  if (data) {
+    console.log("data exist");
+    await resetIPHistory();
+    // (履歴の0番目を作成するロジック)
+    
+    if (!ideaProcessorWindow || ideaProcessorWindow.isDestroyed()) {
+      createIdeaProcessorWindow();
+    }
+    // `did-finish-load`を待ってからデータを送信
+    ideaProcessorWindow!.webContents.once('did-finish-load', () => { // ★ `!`で、存在することを明示
+        ideaProcessorWindow?.webContents.send('load-data', { filePath, data });
+    });
+  } 
+  // b) もし、パースに「失敗」したら (`data`が`null`なら)...
+  else {
+    console.log("no data");
+    // ★ `_createNewUntitledFile`を呼び出す
+    if (ideaProcessorWindow && !ideaProcessorWindow.isDestroyed()) {
+      _createNewUntitledFile(ideaProcessorWindow.webContents);
+    } else {
+      createIdeaProcessorWindow();
+      // ★ `ideaProcessorWindow`が`null`になる可能性を、完全に排除
+      if (ideaProcessorWindow) {
+        ideaProcessorWindow.webContents.once('did-finish-load', () => {
+          if (ideaProcessorWindow) { // `once`の中でも、もう一度チェック
+             _createNewUntitledFile(ideaProcessorWindow.webContents);
+          }
+        });
+      }
+    }
+  }
+}
+
+async function _createNewUntitledFile(webContents: Electron.WebContents) {
+  await resetIPHistory();
+  // `Untitled.mrsd`を、空のデータで作成（または上書き）
+  const zip = new AdmZip();
+  let existingCreatedAt: string | null = null;
+  const initialData = { 
+    nodes: [], 
+    edges: [], 
+    groups: [], 
+    metadata: {
+      createdAt: existingCreatedAt || new Date().toISOString(), // ★ 存在すれば再利用、なければ新規作成
+      updatedAt: new Date().toISOString() // 更新日時も追加すると便利
+      } 
+    };
+  zip.addFile('canvas.json', Buffer.from(JSON.stringify(initialData), 'utf8'));
+  await fsPromises.mkdir(path.dirname(untitledPath), { recursive: true });
+  zip.writeZip(untitledPath);
+
+  // ★ `renderer`に、「準備ができたよ」と、新しいファイルパスを教える
+  webContents.send('file:new', untitledPath);
+};
 
 app.whenReady().then(() => {
   // 1. アプリケーションの基本的なセットアップ
@@ -1989,6 +3012,100 @@ app.on('web-contents-created', (_event, webContents) => {
   });
 });
 
+  ipcMain.handle('get-store-value', (_event, key, defaultValue) => {
+    return store.get(key, defaultValue);
+  });
+
+  ipcMain.on('set-store-value', (_event, key, value) => {
+    store.set(key, value);
+  });
+
+  // アイデアプロセッサ関連
+
+  // ★ `history:push`ハンドラ：`renderer`から送られてきた「純粋なデータ」を、ファイルに書き出すだけ
+ipcMain.handle('history:push', async (_event, stateString: string) => {
+    // 1. Redoスタックの破棄
+    // historyIndex は、常に配列の最後の要素を指しているはず
+    historyFiles.splice(historyIndex + 1);
+    
+    // 2. 新しいファイル名の決定
+    const lastFile = historyFiles[historyFiles.length - 1];
+    const nextIndex = lastFile ? parseInt(lastFile.split('_')[1], 10) + 1 : 0;
+    const fileName = `history_${String(nextIndex).padStart(9, '0')}.json`;
+    
+    // 3. 書き込みとメモリ更新
+    await fsPromises.writeFile(path.join(historyDir, fileName), stateString, 'utf8');
+    historyFiles.push(fileName);
+    // ★ historyIndex は、常に配列の長さ-1 に更新する
+    historyIndex = historyFiles.length - 1;
+
+    // ★★★ ここからが、新しい削除ロジック ★★★
+    // 4. 上限を超えていたら、最も古いファイルを削除
+    const MAX_HISTORY_FILES = 500; 
+    if (historyFiles.length > MAX_HISTORY_FILES) {
+        // a) 配列の先頭にある、最も古いファイル名を取得
+        const oldestFile = historyFiles.shift(); 
+        
+        // b) ★★★ historyIndex-- を「しない」！ ★★★
+        // shift()で配列の長さが1減ったので、新しい historyIndex は
+        // 自動的に (新しい長さ - 1) となり、正しい位置を指す。
+        // （例: 6個 -> 5個になったら、indexは5 -> 4になる）
+        historyIndex = historyFiles.length - 1;
+
+        // c) 物理ファイルを削除
+        if (oldestFile) {
+            await fsPromises.unlink(path.join(historyDir, oldestFile)).catch(() => {});
+        }
+    }
+  });
+
+  // ★ アンドゥ/リドゥのハンドラ：ファイルを読み込んで、中身を返すだけ
+  ipcMain.handle('history:undo', async () => {
+    if (historyIndex > 0) {
+      historyIndex--;
+      return await fsPromises.readFile(path.join(historyDir, historyFiles[historyIndex]), 'utf8');
+    }
+    return null;
+  });
+  ipcMain.handle('history:redo', async () => {
+    if (historyIndex < historyFiles.length - 1) {
+      historyIndex++;
+      return await fsPromises.readFile(path.join(historyDir, historyFiles[historyIndex]), 'utf8');
+    }
+    return null;
+  });
+
+  ipcMain.on('request-native-undo', (event) => {
+    const webContents = event.sender;
+    if (webContents && !webContents.isDestroyed()) {
+      webContents.undo();
+    }
+  });
+
+  ipcMain.on('request-native-redo', (event) => {
+    const webContents = event.sender;
+    if (webContents && !webContents.isDestroyed()) {
+      webContents.redo();
+    }
+  });
+
+  ipcMain.on('idea:openFile', (_event, filePath?: string) => {
+    _openIdeaProcessorFile(filePath);
+  });  
+
+  // ★ タイトル更新ハンドラ
+  ipcMain.on('notify-title-change', (event, filePath) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      const fileName = filePath ? path.basename(filePath) : 'Untitled';
+      win.setTitle(`${fileName}`);
+    }
+  });
+
+  ipcMain.on('file:new', (event) => {
+    _createNewUntitledFile(event.sender);
+  });
+
 });
 
 app.on('window-all-closed', () => {
@@ -2002,61 +3119,87 @@ app.on('before-quit', async (event) => {
   event.preventDefault();
   isQuitting = true;
 
-  const mainWindow = BrowserWindow.getAllWindows().find(win => win.isVisible() && win !== previewWindow);
-
-  // 1. まず、プレビューウィンドウが存在すれば、問答無用で閉じて、完了を待つ
-  if (previewWindow && !previewWindow.isDestroyed()) {
-    console.log('[Main] Closing preview window first...');
-    await new Promise<void>(resolve => {
-      previewWindow!.once('closed', () => resolve());
-      previewWindow!.close();
-    });
-    console.log('[Main] Preview window closed.');
-  }
-
-  // プレビューがなくなった状態で、メインウィンドウの処理に進む
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    app.quit();
-    return;
-  }
-  
   try {
-    // 2. メインウィンドウにだけ、未保存確認を行う
-    const hasUnsavedChangesPromise = new Promise<boolean>(resolve => {
-      ipcMain.once('response-unsaved-changes', (_event, hasChanges) => resolve(hasChanges));
-    });
-    mainWindow.webContents.send('request-unsaved-changes-check');
-    const hasUnsavedChanges = await hasUnsavedChangesPromise;
-
-    let confirmQuit = true;
-    if (hasUnsavedChanges) {
-      const choice = await dialog.showMessageBox(mainWindow, {
-        type: 'question',
-        buttons: ['変更を破棄して終了', 'キャンセル'],
-        defaultId: 1,
-        title: '未保存の変更',
-        message: '保存されていない変更があります。本当に終了しますか？',
-        cancelId: 1,
+    // --- ステップ1: アイデアプロセッサに終了準備を問い合わせる ---
+    if (ideaProcessorWindow && !ideaProcessorWindow.isDestroyed()) {
+      const ipReadyPromise = new Promise<boolean>(resolve => {
+        ipcMain.once('ready-to-close', (_e, canClose) => resolve(canClose));
       });
-      if (choice.response === 1) {
-        confirmQuit = false;
+      ideaProcessorWindow.webContents.send('please-prepare-to-close');
+      
+      const canCloseIp = await ipReadyPromise;
+      // もしIP側でキャンセルされたら、ここで終了シーケンスを完全に中断
+      if (!canCloseIp) {
+        isQuitting = false;
+        return;
       }
     }
 
+    // --- 2. メインウィンドウの未保存だけを問い合わせる ---
+    let confirmQuit = true;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const hasChanges = await mainWindow.webContents.executeJavaScript(
+        'window.electronAPI.checkForUnsavedChanges()', true
+      ).catch(() => false); // ウィンドウが応答しない場合は、変更なしと見なす
+
+      if (hasChanges) {
+        const choice = await dialog.showMessageBox(mainWindow, {
+          type: 'question',
+          buttons: ['変更を破棄して終了', 'キャンセル'],
+          defaultId: 1,
+          cancelId: 1,
+          title: '未保存の変更',
+          message: 'メインエディタに保存されていない変更があります。本当に終了しますか？',
+        });
+        if (choice.response === 1) { // キャンセルが押された
+          confirmQuit = false;
+        }
+      }
+    }
+
+    // --- ユーザーがキャンセルしたら、ここで処理を完全に中断 ---
+    if (!confirmQuit) {
+      isQuitting = false;
+      return;
+    }
+
+    // --- ステップ3: すべての確認が取れたので、アプリを終了する ---
     if (confirmQuit) {
-      // 3. メインウィンドウにだけ、セッション保存を要求する
+
+    // a) 他のすべてのサブウィンドウを閉じる
+    BrowserWindow.getAllWindows().forEach(win => {
+      if (win !== mainWindow) {
+        win.destroy();
+      }
+    });
+
+    // b) メインウィンドウにセッション保存を依頼
+    if (mainWindow && !mainWindow.isDestroyed()) {
       const sessionSavedPromise = new Promise<void>(resolve => {
         ipcMain.once('session-saved', () => resolve());
       });
       mainWindow.webContents.send('request-session-save');
       await sessionSavedPromise;
-      
-      app.quit();
+    
+
+        // c) 最後に、メインウィンドウの最終的な状態を保存する
+        const isFullscreen = mainWindow.isFullScreen();
+        store.set('isFullscreen', isFullscreen);
+        // フルスクリーンでない場合のみ、boundsを保存
+        if (!isFullscreen) {
+          store.set('windowBounds', mainWindow.getBounds());
+        }    
+      }
+
+    app.exit(); // すべての準備が整ったので、アプリを終了
+
     } else {
       isQuitting = false;
-    }
+      return;
+    }    
+
   } catch (e) {
-    console.error('Error during before-quit sequence:', e);
-    app.quit();
+    console.error('Error during sequential before-quit sequence:', e);
+    app.exit(); // エラーが起きても、アプリは終了させる
   }
 });

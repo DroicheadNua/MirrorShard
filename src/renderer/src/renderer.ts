@@ -2,9 +2,9 @@
 
 // --- [エリア 1: Imports] ---
 import '../assets/main.css';
-import { EditorState, Compartment, Transaction } from '@codemirror/state';
-import { EditorView, keymap,} from '@codemirror/view';
-import { history, historyKeymap, cursorDocStart, cursorDocEnd } from '@codemirror/commands';
+import { EditorState, Compartment, Transaction, RangeSetBuilder } from '@codemirror/state';
+import { EditorView, keymap, Decoration, ViewPlugin, ViewUpdate, DecorationSet } from '@codemirror/view';
+import { history, historyKeymap, cursorDocStart, cursorDocEnd, insertTab } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
@@ -22,6 +22,7 @@ interface ProjectFile {
   encoding: string;
   eol: 'LF' | 'CRLF';
   encodingWarning?: string; 
+  isSpotlightMode?: boolean;
 }
 interface AppState {
   projectFiles: ProjectFile[];
@@ -90,7 +91,7 @@ const createFontTheme = (fontFamilyValue: string) => {
 };
 const myLightTheme = EditorView.theme({
   '&': {
-    color: '#333333',
+    color: '#111111',
     backgroundColor: 'transparent',
   },
   '&.cm-focused': {
@@ -132,10 +133,10 @@ const dynamicFontTheme = createFontTheme('sans-serif');
 const myDarkTheme = EditorView.theme({
   // '&'はエディタのルート要素 .cm-editor を指す
   '&': {
-    color: '#DDDDDD', // --editor-text-color
+    color: '#CCCCCC', // --editor-text-color
     backgroundColor: 'transparent', // CSSの背景を透過させる
   },
-  '& .cm-line': { color: '#DDDDDD' },
+  '& .cm-line': { color: '#CCCCCC' },
   // エディタのフォーカス時の枠線
   '&.cm-focused': {
     outline: 'none',
@@ -152,7 +153,7 @@ const myDarkTheme = EditorView.theme({
   },
   // ★★★ 変換中のアンダーラインの色 ★★★
   '.cm-composition-underline': {
-    textDecorationColor: '#DDDDDD', // テキストの色と同じにする
+    textDecorationColor: '#CCCCCC', // テキストの色と同じにする
   },
   // ★ スクロールバーのスタイルを追加
   '& ::-webkit-scrollbar': {
@@ -228,6 +229,7 @@ const createNewState = (doc: string): EditorState => {
                 { key: 'Mod-ArrowDown', run: (v) => { cursorDocEnd(v); v.dispatch({ effects: EditorView.scrollIntoView(v.state.selection.main.head, { y: "center" }) }); return true; } },
                 { key: 'Ctrl-o', run: () => { openFileAction(); return true; } },
                 { key: 'Ctrl-s', run: () => { saveFileAction(false); return true; } }, 
+                { key: 'Tab', run: insertTab },
             ]),
             EditorView.lineWrapping,
             markdown({ base: markdownLanguage }),
@@ -304,9 +306,96 @@ const createNewState = (doc: string): EditorState => {
             fontFamily.of(createFontTheme(currentCssFontFamily)),
             fontSizeCompartment.of(EditorView.theme({ '&': { fontSize: `${currentFontSize}px` } })),
             highlightingCompartment.of(syntaxHighlighting(document.body.classList.contains('dark-mode') ? darkHighlightStyle : lightHighlightStyle)),
+            spotlightPlugin,
         ]
     });
 };
+
+// --- スポットライトモード用のDecorationを定義 ---
+const unfocusedMark = Decoration.mark({ class: 'cm-unfocused' });
+
+// --- スポットライトモードを管理するViewPlugin ---
+const spotlightPlugin = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+
+  constructor(view: EditorView) {
+    this.decorations = this.buildDecorations(view);
+  }
+
+  update(update: ViewUpdate) {
+    // 通常の更新は、カーソル移動時などに限定しておく（効率化）
+    if (update.docChanged || update.selectionSet) {
+      this.decorations = this.buildDecorations(update.view);
+    }
+  }
+
+  forceUpdate(view: EditorView) {
+    this.decorations = this.buildDecorations(view);
+  }
+
+  buildDecorations(view: EditorView): DecorationSet {
+    const builder = new RangeSetBuilder<Decoration>();
+    const activeFile = state.projectFiles.find(f => f.id === state.activeFileId);
+
+    // スポットライトモードが有効でなければ、何もせず終了
+    if (!activeFile || !activeFile.isSpotlightMode) {
+      return builder.finish();
+    }
+
+    const doc = view.state.doc;
+    const cursorPos = view.state.selection.main.head;
+    
+    let sectionStartPos = 0;
+    let sectionEndPos = doc.length;
+
+    // --- 1. 現在のセクションの「開始行」を探す ---
+    // カーソル行から上に向かってスキャン
+    let currentLine = doc.lineAt(cursorPos);
+    while (currentLine.number > 1) {
+      // 見出し行を見つけたら、そこを開始点とする
+      if (/^#+\s/.test(currentLine.text)) {
+        sectionStartPos = currentLine.from;
+        break;
+      }
+      currentLine = doc.line(currentLine.number - 1);
+    }
+    // 先頭まで見出しがなかった場合、ファイルの先頭が開始点
+    if (sectionStartPos === 0 && !/^#+\s/.test(doc.line(1).text)) {
+      sectionStartPos = 0;
+    }
+
+    // --- 2. 現在のセクションの「終了行」を探す ---
+    const startLine = doc.lineAt(sectionStartPos);
+    // 開始行の見出しレベルを取得 (見出しでなければレベル0)
+    const startLevelMatch = /^#+\s/.exec(startLine.text);
+    const startLevel = startLevelMatch ? startLevelMatch[0].length : 0;
+
+    // 開始行の次の行から、下に向かってスキャン
+    for (let i = startLine.number + 1; i <= doc.lines; i++) {
+        const line = doc.line(i);
+        const match = /^#+\s/.exec(line.text);
+        // 同じか、より上位の見出しを見つけたら、そこが終了点
+        if (match && match[0].length <= startLevel) {
+            sectionEndPos = line.from;
+            break;
+        }
+    }
+
+    // --- 3. Decoration（装飾）を構築 ---
+    // a) ドキュメントの先頭から、セクション開始点までを「非フォーカス」にする
+    if (sectionStartPos > 0) {
+      builder.add(0, sectionStartPos, unfocusedMark);
+    }
+    // b) セクションの終了点から、ドキュメントの最後までを「非フォーカス」にする
+    if (sectionEndPos < doc.length) {
+      builder.add(sectionEndPos, doc.length, unfocusedMark);
+    }
+
+    return builder.finish();
+  }
+}, {
+  decorations: v => v.decorations
+});
 
 
 // --- [エリア 4: アクション関数 (Stateを変更する唯一の場所)] ---
@@ -530,30 +619,40 @@ const openFileAction = async () => {
 };
 
 /** 指定されたパスのファイルを読み込み、タブに表示・切り替えする */
-const openFileAndSwitch = async (filePath: string) => {
+const openFileAndSwitch = async (filePath: string, isTemporary?: boolean) => {
+    const finalFilePath = isTemporary ? null : filePath;
+    const finalTitle = isTemporary ? 'From Idea Processor' : filePath.split(/[\\/]/).pop() || 'Untitled';
+    
+    // 既存タブのチェックでは、nullでないfilePathのみを対象にする
+    if (finalFilePath) {
+        const existingFile = state.projectFiles.find(f => f.filePath === finalFilePath);
+        if (existingFile) {
+            switchFile(existingFile.id);
+            return;
+        }
+    }    
+
+    // 最初の空のタブを上書きする処理
     if (state.projectFiles.length === 1 && state.projectFiles[0].filePath === null && state.projectFiles[0].state.doc.length === 0) {
         state.projectFiles = [];
         state.activeFileId = null;
     }
-    const existingFile = state.projectFiles.find(f => f.filePath === filePath);
-    if (existingFile) {
-        switchFile(existingFile.id);
-        return;
-    }
+
     try {
-        window.electronAPI.addToHistory(filePath);
+        if (!isTemporary) { // 一時ファイルでなければ履歴に追加
+            window.electronAPI.addToHistory(filePath);
+        }      
         const result = await window.electronAPI.readFile(filePath);
         if (result) {
             if (result.warning) {
               window.electronAPI.showEncodingWarningDialog(result.warning);
             }          
-            const title = filePath.split(/[\\/]/).pop() || 'Untitled';
             const newFile: ProjectFile = {
                 id: crypto.randomUUID(),
-                filePath,
-                title,
+                filePath: finalFilePath, 
+                title: finalTitle, 
                 state: createNewState(result.content),
-                isDirty: false,
+                isDirty: isTemporary ? true : false,
                 encoding: result.encoding,
                 eol: result.eol,
                 encodingWarning: result.warning,
@@ -667,6 +766,7 @@ const showEditorContextMenu = (targetView: EditorView) => {
       },
         { type: 'separator' },
         { id: 'open-file', label: 'ファイルを開く...' },
+        { id: 'import-scrivener', label: 'Scrivenerからインポート' },
         { id: 'save-file', label: 'ファイルを保存...' },
         { id: 'save-as-file', label: '名前を付けて保存...' },
         { type: 'separator' },
@@ -767,6 +867,13 @@ const toggleOutlinePanelVisibility = () => {
   if (outlinePanel) {
     outlinePanel.classList.toggle('hidden-by-shortcut');
   }
+};
+
+const toggleRightAlignTextarea = () => {
+  if (document.body.classList.contains('focus-mode')) {
+    return; 
+  }
+  document.body.classList.toggle('right-align-mode');
 };
 
 /**
@@ -1194,7 +1301,35 @@ const updateOutline = (currentLineNumber: number = 0) => {
     outlineContainer.appendChild(fileListUl);
 };
 
+/** Scrivenerプロジェクトのインポートを開始する */
+async function importFromScrivener() {
+  try {
+    // 1. mainプロセスの処理を呼び出し、完了するまで待つ
+    const result = await window.electronAPI.importFromScrivener();
 
+    // 2. 結果が null でなければ (＝ユーザーがキャンセルしていなければ)、新しいタブを開く
+    if (result) {
+      const newFile: ProjectFile = {
+          id: crypto.randomUUID(),
+          filePath: null,
+          title: result.title,
+          state: createNewState(result.content),
+          isDirty: true,
+          encoding: 'utf8',
+          eol: 'LF',
+          encodingWarning: undefined,
+      };
+      state.projectFiles.push(newFile);
+      switchFile(newFile.id);
+    }
+    // キャンセルされた場合は、resultがnullなので、何も起こらない
+
+  } catch (error) {
+    // 3. mainプロセスでエラーが throw された場合、ここでキャッチできる
+    console.error('Scrivener import failed:', error);
+    // (main側でdialogが既に出ているので、renderer側では何もしなくても良い)
+  }
+}
 
 
 
@@ -1270,8 +1405,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 3. すべてのイベントリスナーを登録
     await initializeApp();
 
-    // 4. 準備完了をメインプロセスに通知
-    window.electronAPI.rendererReady();
 });
 
 /**
@@ -1296,6 +1429,7 @@ async function initializeApp() {
     const expandAllBtn = document.getElementById('expand-all-btn');
     const bgCycleBtn = document.getElementById('bg-cycle-btn');
     const focusModeBtn = document.getElementById('focus-mode-btn');
+    const IPBtn = document.getElementById('ip-btn');
     const zenModeBtn = document.getElementById('zen-mode-btn');
     const cycleFontBtn = document.getElementById('cycle-font-btn');
     const bgmCycleBtn = document.getElementById('bgm-cycle-btn');
@@ -1318,13 +1452,16 @@ async function initializeApp() {
     bgCycleBtn?.addEventListener('click', cyclebg);
     cycleFontBtn?.addEventListener('click', () => cycleFont());
     minimizeBtn?.addEventListener('click', () => window.electronAPI.minimizeWindow());
-    fullscreenBtn?.addEventListener('click', () => window.electronAPI.toggleFullScreen());
+    fullscreenBtn?.addEventListener('click', () => window.electronAPI.requestToggleFullscreen());
     closeBtn?.addEventListener('click', () => window.electronAPI.closeWindow());
     zenModeBtn?.addEventListener('click', () => {
       // 現在の状態を反転させた状態を、setZenModeに渡す
       setZenMode(!isZenMode); 
     });
     focusModeBtn?.addEventListener('click', toggleFocusMode);
+    IPBtn?.addEventListener('click', () => {
+      window.electronAPI.createIdeaProcessorWindow(); 
+    });    
     settingsBtn?.addEventListener('click', () => {
       window.electronAPI.toggleSettingsWindow(); 
     });    
@@ -1447,6 +1584,9 @@ exportBtn?.addEventListener('click', () => {
     window.electronAPI.onToggleOutlineShortcut(() => {
       toggleOutlinePanelVisibility();
     });  
+    window.electronAPI.onToggleRightAlignShortcut(() => {
+      toggleRightAlignTextarea();
+    });      
     window.electronAPI.onTriggerFocusMode(toggleFocusMode);
     window.electronAPI.onTriggerbgmCycle(cyclebgm);
     window.electronAPI.onTriggerbgmPlayPause(togglePlayPausebgm);
@@ -1467,6 +1607,11 @@ exportBtn?.addEventListener('click', () => {
     const filePaths = state.projectFiles.map(f => f.filePath);
     // mainにセッションデータを送信
     window.electronAPI.sessionSave(filePaths.filter((p): p is string => p !== null));
+    const outlinePanel = document.getElementById('outline-panel');
+    const isVisible = !(outlinePanel && outlinePanel.classList.contains('hidden-by-shortcut'));
+    window.electronAPI.setStoreValue('isOutlineVisible', isVisible);
+    const isRight = !!(document.body.classList.contains('right-align-mode'));
+    window.electronAPI.setStoreValue('isRightAlign', isRight);    
     // 保存が終わったことをmainに"通知"
     window.electronAPI.sessionSaved();
     console.log('[Renderer] Session data sent. Notifying main process.');
@@ -1474,6 +1619,32 @@ exportBtn?.addEventListener('click', () => {
     window.electronAPI.onThemeUpdated((isDarkMode) => {
     applyTheme(isDarkMode);
   });
+
+  // --- グローバルなキーボードショートカットリスナー ---
+  window.addEventListener('keydown', (e) => {
+    const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+    
+    // --- Toggle Spotlight Mode: Ctrl + L ---
+    if (isCtrlOrCmd && e.key.toLowerCase() === 'l') {
+      e.preventDefault();      
+      const activeFile = state.projectFiles.find(f => f.id === state.activeFileId);
+      if (activeFile) {
+        activeFile.isSpotlightMode = !activeFile.isSpotlightMode;
+        if (view) { 
+          // 1. viewから、spotlightPluginの「インスタンス」を取得
+          const pluginInstance = view.plugin(spotlightPlugin);
+          // 2. もしインスタンスが存在すれば、その公開メソッドを呼び出す
+          if (pluginInstance) {
+            pluginInstance.forceUpdate(view);
+            // 3. viewに変更があったことを伝え、再描画を強制する
+            view.dispatch({}); 
+          }
+        }
+      }
+    }
+  });
+
+
   // プレビューウィンドウが（ユーザーによって×ボタンで）閉じられたことをmainから通知してもらう
   window.electronAPI.onPreviewHasBeenClosed(() => {
     console.log('[Renderer] Preview window was closed.');
@@ -1492,6 +1663,11 @@ exportBtn?.addEventListener('click', () => {
     await applyFont(fontData); 
   });
 
+  window.electronAPI.onContextMenuCommand((command) => {
+    if (command === 'import-scrivener') {
+      importFromScrivener();
+    }
+  });
 
 
 // ★★★ settingsウィンドウからの、直接のメッセージを受け取る ★★★
@@ -1589,6 +1765,23 @@ window.interop.onMainMessage('apply-custom-background', async (filePath) => {
     // ★ 初期化時も、setZenModeを呼ぶことで状態の整合性を保つ
     setZenMode(true); 
   }
+
+  const outlinePanel = document.getElementById('outline-panel');
+  if (outlinePanel) {
+    const isVisible = await window.electronAPI.getStoreValue('isOutlineVisible', true);
+    if (isVisible) {
+      outlinePanel.classList.remove('hidden-by-shortcut');
+    } else {
+      outlinePanel.classList.add('hidden-by-shortcut');
+    }
+  }
+  const isRight = await window.electronAPI.getStoreValue('isRightAlign', false);
+  if (isRight) {
+    document.body.classList.add('right-align-mode');
+  } else {
+    document.body.classList.remove('right-align-mode');
+  }
+ 
 
 // ★背景とBGMの初期化  
 //  1. まず、ストアに保存されたカスタムパスがあるか確認
@@ -1702,4 +1895,10 @@ let initialBgmLoaded = false;
   if (savedSize) updateFontSize(savedSize);  
     
     view.focus();
+  requestAnimationFrame(() => {
+    // 念のため、さらにもう1フレーム待つことで、描画の完了を確実にする
+    requestAnimationFrame(() => {
+      window.electronAPI.rendererReady();
+    });
+  });
 }

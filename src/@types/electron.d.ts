@@ -65,7 +65,7 @@ export interface IElectronAPI {
   closeWindow: () => void;
   
   // ウィンドウ操作 (共通)
-  toggleFullScreen: () => void;
+  requestToggleFullscreen: () => void;
 
   // フォントサイズ
   getfontsize: () => Promise<number>;
@@ -81,13 +81,14 @@ export interface IElectronAPI {
 
   // プレビューウィンドウ
   togglePreviewWindow: () => void;
+  toggleIPWindow: () => void;
 
   onLoadText: (callback: (data: { content: string; isDarkMode: boolean; fontsize: number; lineNumber: number }) => void) => () => void;
   
   // リアルタイムスクロール同期
   syncScrollPosition: (lineNumber: number) => void;
   onSyncScrollPosition: (callback: (lineNumber: number) => void) => () => void;
-  onOpenFile: (callback: (filePath: string) => void) => () => void;
+  onOpenFile: (callback: (filePath: string, isTemporary?: boolean) => void) => () => void;
   onScrollTo: (callback: (direction: 'top' | 'bottom') => void) => () => void;
   onThemeUpdated: (callback: (isDarkMode: boolean) => void) => () => void;  
   themeUpdated: (data: { isDarkMode: boolean; }) => void;
@@ -163,6 +164,7 @@ export interface IElectronAPI {
   getZenModeState: () => Promise<boolean>;
   setZenModeState: (isEnabled: boolean) => void;
   onToggleOutlineShortcut: (callback: () => void) => () => void;
+  onToggleRightAlignShortcut: (callback: () => void) => () => void;
   openResourcesFolder: () => void;
   onCycleTab: (callback: (direction: 'next' | 'previous') => void) => () => void;
   getBgmBuffer: (fileName: string) => Promise<Buffer | null>;
@@ -178,6 +180,7 @@ export interface IElectronAPI {
   applyFontToMainWindow: (fontData: { path: string; cssFontFamily: string; base64: string; format: string }) => void;
   onApplySystemFontFromSettings: (callback: (fontData: { path: string; cssFontFamily: string; base64: string; format: string }) => void) => () => void;
   toggleSettingsWindow: () => void;
+  createIdeaProcessorWindow: () => void;
 
   getAppliedSystemFontPath: () => Promise<string | undefined>;
   setAppliedSystemFontPath: (filePath: string | null) => Promise<void>;
@@ -199,12 +202,44 @@ export interface IElectronAPI {
   analyzeSourceFile: (filePath: string) => Promise<{ encoding: string; eol: 'LF' | 'CRLF'; } | null>;
   getCustomPaths: () => Promise<{ background?: string; bgm?: string }>;
   setCustomPath: (args: { type: 'background' | 'bgm'; path: string | null }) => void;
-
-
-
   getBackgroundDataUrl: (filePath: string) => Promise<string | null>;
   getBgmDataUrl: (filePath: string) => Promise<string | null>;
-
+saveIdeaProcessorFile: (filePath: string | null, saveData: any) => Promise<any>;
+  on: (channel: string, callback: (...args: any[]) => void) => void;
+  debugLog: (...args: any[]) => void;
+  notifyReadyForData: () => void;
+  ideaOpenFile: () => Promise<void>;
+  ideaOpenFileByPath: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+  checkDirtyState: () => Promise<boolean>;
+  triggerSaveSync: () => Promise<{
+    success: boolean;
+    path?: string;
+    cancelled?: boolean;
+    error?: string;
+  }>;  
+  notifyReadyToClose: (canClose: boolean, zoomState: any, nextFilePath?: string | null) => void;
+  historyPush: (stateString: string) => Promise<void>;
+  historyUndo: () => Promise<string | null>;
+  historyRedo: () => Promise<string | null>;
+  fileNew: () => void;
+  notifyTitleChange: (filePath: string | null) => void;  
+  notifyRendererIsReady: () => void;
+  exportAsMarkdown: (content: string, currentPath: string | null) => void;
+  exportAsImage: (dataUrl: string, format: 'png' | 'jpeg', currentPath: string | null) => void;
+  exportAsPdf: (dataUrl: string, currentPath: string | null) => void;
+  exportAsHtml: (dataUrl: string, currentPath: string | null) => void;
+  sendMarkdownToEditor: (content: string) => void;
+  importFromScrivener: () => Promise<{ title: string; content: string } | null>;
+  onContextMenuCommand: (callback: (command: string) => void) => void;
+  resetIpWindow: () => void;
+  getStoreValue: <T>(key: string, defaultValue: T) => Promise<T>;
+  setStoreValue: (key: string, value: any) => void;  
+  requestNativeUndo: () => void;
+  requestNativeRedo: () => void;  
+  checkForUnsavedChanges: () => Promise<boolean>;
+  confirmSaveDialog: (windowName: string) => Promise<'save' | 'discard' | 'cancel'>;
+  toggleIpAlwaysOnTop: () => Promise<boolean>;
+  togglePreviewAlwaysOnTop: () => Promise<boolean>;
 }
 
 // グローバルなwindowオブジェクトにelectronAPIが存在することを宣言

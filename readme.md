@@ -1,24 +1,31 @@
-MirrorShard ver. 1.2.1  
+MirrorShard ver. 1.3.0  
 
 日本語での小説執筆に特化した、クロスプラットフォームのテキストエディタです。  
 没入感を重視したミニマルなデザインに仕上げました。  
 
 ![MirrorShard Key Visual](screenshots/ScreenShot01.png)
 
-## ダウンロード
+■ ダウンロード
 
-[![Windows](https://img.shields.io/badge/Download-Windows-blue)]
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.2.1/MirrorShard.Setup.1.2.1.exe)
-[![Mac (Apple Silicon)](https://img.shields.io/badge/Download-Mac_(Apple_Silicon)-green)]
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.2.1/MirrorShard-1.2.1-arm64.dmg)
-[![Linux](https://img.shields.io/badge/Download-Linux-lightgrey)]
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.2.1/MirrorShard-1.2.1-x86_64.AppImage)
+[![Windows](https://img.shields.io/badge/Download-Windows-blue)]  
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.3.0/MirrorShard.Setup.1.3.0.exe)  
+[![Mac (Apple Silicon)](https://img.shields.io/badge/Download-Mac_(Apple_Silicon)-green)]  
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.3.0/MirrorShard-1.3.0-arm64.dmg)  
+[![Linux](https://img.shields.io/badge/Download-Linux-lightgrey)]  
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.3.0/MirrorShard-1.3.0-x86_64.AppImage)  
 
 または、[最新のリリース一覧ページ](https://github.com/DroicheadNua/MirrorShard/releases/latest)からダウンロードできます。  
-  
+
+■注意事項  
+　インストールやご使用などにつきまして、何か疑問の点等ございましたら「FAQ.md」を御覧ください。  
+　それでも解決しない問題がございましたら、MirrorShard開発アカウント  
+mirrorshard.dev@gmail.com
+までご一報いただければ幸いです。  
 
 ■主な特徴  
 ・縦書きと青空文庫形式のルビに対応し、リアルタイムで更新されるプレビューウィンドウ  
+・アイデアプロセッサを搭載。発想支援と執筆をシームレスに連携  
+![MirrorShard Idea Processor](screenshots/ScreenShot05.png)
 ・数十万行に及ぶ巨大サイズのテキストにも対応  
 ・マークダウン記法によるアウトライン機能を搭載。またタブとアウトラインパネルが一体化した構造により、複数のテキストファイルをシームレスに運用可能  
 ・フレームレスウィンドウを採用したミニマルなデザインに加え、UIを非表示にできるZENモードを搭載  
@@ -40,14 +47,16 @@ ZENモード（UI非表示）状態でもショートカットは有効ですの
 素材フォルダを開く　Ctrl + Shift + J（Cmd + Shift + J）　素材フォルダを開きます。中身を入れ替えることでカスタマイズが可能です。  
 
 ◯表示  
-縦書きプレビュー	Ctrl + P（Cmd + P）　プレビューウィンドウを開閉します。  
-　※プレビューウィンドウは書き込み可能ですが、プレビューウィンドウでの編集内容は保存されません。執筆はあくまでメインウィンドウの方で行ってください。  
+縦書きプレビュー	Ctrl + P（Cmd + P）　プレビューウィンドウを開閉します。   
+アイデアプロセッサ　Ctrl + I（Cmd + I）　アイデアプロセッサウィンドウを開きます（詳細は後述）。  
 ダークモード切替	Ctrl + T（Cmd + T）　通常モードとダークモードを切り替えます。  
+スポットライトモード切替	Ctrl + L（Cmd + L）　編集中の項目以外をぼかして表示します。  
 Zenモード切替	Ctrl + Shift + C（Cmd + Shift + C）　UIの表示/非表示を切り替えます。  
 半透明ウィンドウ切替	Ctrl + Shift + W（Cmd + Shift + W）　背景画像が目立つようにテキスト領域を右に寄せ、半透明にします。
 ![MirrorShard Cat](screenshots/ScreenShot03.png)
-アウトライン表示切替	Ctrl + Shift + O（Cmd + Shift + O）　アウトラインパネルの表示・非表示を切り替えます。ZENモード中にアウトライン機能を使いたい場合などに。 
- 最小化	Ctrl + H（Cmd + H）　ウィンドウを最小化します。  
+アウトライン表示切替	Ctrl + Shift + O（Cmd + Shift + O）　アウトラインパネルの表示・非表示を切り替えます。ZENモード中にアウトライン機能を使いたい場合などに。  
+テキストエリア右寄せ/解除		Ctrl + Shift + O（Cmd + Shift + O）　テキスト表示エリアを右に寄せます。プレビューウィンドウやアイデアプロセッサウィンドウを見ながら執筆したい場合などに便利です。もう一度押すと解除されます。  
+最小化	Ctrl + H（Cmd + H）　ウィンドウを最小化します。  
 フルスクリーン切替	F11（Cmd + Ctrl + F）　フルスクリーンにします。ZENモードと組み合わせると、執筆環境からノイズがほとんど消えます。  
 ショートカットキー一覧　F1　ショートカットキーの一覧を開きます。もう一度F1、またはESCを押すと消えます。  
 文書切替　Ctrl+Tab  
@@ -65,8 +74,8 @@ BGM切替	Ctrl + Shift + M（Cmd + Shift + M）　BGMを切り替えます。
 BGM再生/停止	Ctrl + Shift + P（Cmd + Shift + P）　BGMを再生／停止します。  
 タイプ音　Ctrl + Shift + T（Cmd + Shift + T）　タイプ音の再生／停止を切り替えます。  
 降雪エフェクト　Ctrl + Shift + E（Cmd + Shift + E）　プレビューウィンドウに雪を降らせます。  
-高度な設定　F2　「高度な設定」ウィンドウを開きます（詳細は後述）。
-エクスポート　Ctrl + E（Cmd + E）　EPUB・PDF・HTMLへのエクスポートを行うウィンドウを開きます（詳細は後述）。
+高度な設定　F2　「高度な設定」ウィンドウを開きます（詳細は後述）。  
+エクスポート　Ctrl + E（Cmd + E）　EPUB・PDF・HTMLへのエクスポートを行うウィンドウを開きます（詳細は後述）。  
 
 ◯基本的な編集機能  
 元に戻す	Ctrl + Z（Cmd + Z）  
@@ -82,6 +91,8 @@ BGM再生/停止	Ctrl + Shift + P（Cmd + Shift + P）　BGMを再生／停止�
 ■右クリックメニュー  
 ・最近使ったファイルから開く  
 ・ファイルを開く  
+・Scrivenerからインポート  
+　　Scrivenerの.scrivプロジェクトフォルダを直接インポートし、単一のマークダウンファイルとして展開できます。  
 ・ファイルを保存  
 ・名前を付けて保存  
 ・元に戻す  
@@ -105,10 +116,9 @@ replace / replace all: 現在のマッチ箇所を置換 / すべてのマッチ
 match case: チェックを入れると、大文字と小文字を区別して検索します。（例: Bookとbookを別の単語として扱います）  
 regexp (チェックボックス): チェックを入れると、正規表現による高度な検索が有効になります。（例: ^#で行頭の見出しを検索するなど）  
 by word (チェックボックス): チェックを入れると、単語単位で完全に一致するものだけを検索します。（例: catを検索したときに、categoryの中のcatにはマッチしなくなります）  
-閉じる: 検索パネルは、ESCキーを押すか、右上の×ボタンを押すことで閉じることができます。  
+閉じる: 検索パネルは、ESCキーを押すか、パネル右上の×ボタンを押すことで閉じることができます。  
 
 ■エンコードについて  
-
 　原則として、UTF-8 (BOMなし) での利用を強く推奨します。  
 
 　本ソフトウェアはテキストファイルのエンコードを自動判別して読み込む仕様になっておりますが、特殊なエンコードの場合、判別に失敗することがあります。  
@@ -129,7 +139,8 @@ by word (チェックボックス): チェックを入れると、単語単位�
 
 ・背景画像  
 「background」フォルダにお好きな画像ファイル（jpg・jpeg・png・gif・webp）を入れてください。  
-　はじめから入っている画像は不要でしたら削除して構いませんが、プレビュー画面の背景にはBG01.pngが指定されています。プレビューの背景を差し替えたい場合には、お好きな画像ファイルをBG01.pngにリネームしてお使いください。  
+　はじめから入っている画像は不要でしたら削除して構いません。  
+　なお、gifアニメーションにも対応しています。  
 
 ・フォント  
 「fonts」フォルダにお好きなフォントファイル（ttf・otf・ttc）を入れてください。  
@@ -163,6 +174,31 @@ by word (チェックボックス): チェックを入れると、単語単位�
 
 ◯ウィンドウを閉じる  
 　ウィンドウ右上の×ボタン、F2キー、ESCキーのどれかを押すと、設定画面が閉じます。  
+
+■プレビューウィンドウ  
+　Ctrl+Pでプレビューウィンドウを開くことができます。  
+
+◯特徴  
+　・メインウィンドウの編集にリアルタイムで追随。  
+　・フォントや文字サイズもメインウィンドウと同じものが適用されます。  
+　・青空文庫形式のルビに対応。エディタ側で所定の形式（｜親字《ルビ》）で書けば、プレビュー側でルビとして反映されます。  
+　・終了時のウィンドウサイズと位置は保存され、次回起動時に反映されます。  
+
+◯操作
+　右上のボタンでウィンドウ操作などができます。  
+　・プレビューを閉じる(Ctrl+P): プレビューウィンドウを閉じます。
+　・最大化／解除: ウィンドウを最大化／解除します。  
+　・降雪エフェクト(Ctrl+Shitf+E): プレビュー画面に雪を降らせます。もう一度押すと解除されます。  
+
+◯注意事項  
+　プレビューウィンドウは書き込み可能ですが、プレビューウィンドウでの編集内容は保存されません。執筆はあくまでメインウィンドウの方で行ってください。  
+
+■アイデアプロセッサ  
+　Ctrl+Iでアイデアプロセッサウィンドウを開くことができます。  
+　ダブルクリックでノード作成と既存ノードの編集、CtrlやShiftを押しながらクリックすることでノード同士にリンクや矢印を張るというシンプルな操作でお使い頂けますが、他にも多彩な機能を持っています。  
+　詳細は「アイデアプロセッサ機能使用ガイド」をご確認ください。  
+　また、このアイデアプロセッサ機能で作成したユーザーマニュアルがございますので、よろしければご利用ください。  
+![MirrorShard Idea Processor Manual](screenshots/ScreenShot04.png)
 
 ■エクスポート  
 　電子書籍（EPUB形式）やPDF、HTMLへのエクスポートを行います。  
