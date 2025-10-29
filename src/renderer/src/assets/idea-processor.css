@@ -195,11 +195,11 @@ body.dark-mode .top-right-buttons button ,body.dark-mode #outline-collapse-all, 
 
   /* ドロップダウンメニュー */
 
-.export-container {
+.export-container, .template-container {
   position: relative; /* ドロップダウンメニューの位置の基準点 */
 }
 
-#ip-export-menu {
+#ip-export-menu, #ip-template-menu {
   position: absolute;
   top: 100%; /* ボタンの真下に表示 */
   right: 0;
@@ -211,18 +211,18 @@ body.dark-mode .top-right-buttons button ,body.dark-mode #outline-collapse-all, 
   padding: 5px 0;
 }
 
-#ip-export-menu.hidden {
+#ip-export-menu.hidden, #ip-template-menu.hidden {
   display: none;
 }
 
-.export-item {
+.export-item, .template-item {
   padding: 8px 12px;
   color: #ccc;
   cursor: pointer;
   font-size: 14px;
 }
 
-.export-item:hover {
+.export-item:hover, .template-item:hover {
   background-color: #555;
 }
 
@@ -237,6 +237,26 @@ body:not(.dark-mode) .export-item {
 body:not(.dark-mode) .export-item:hover {
   background-color: #eee;
 }
+body:not(.dark-mode) #ip-template-menu {
+  background-color: #f9f9f9;
+  border-color: #ddd;
+}
+body:not(.dark-mode) .template-item {
+  color: #333;
+}
+body:not(.dark-mode) .template-item:hover {
+  background-color: #eee;
+}
+
+#ip-content-editor::placeholder {
+  color: #faa; 
+}
+
+/* ライトモード用のプレースホルダー色 */
+body:not(.dark-mode) #ip-content-editor::placeholder {
+  color: #911;
+}
+
 
 /* --- アイデアプロセッサ用アウトラインパネル --- */
 
@@ -309,6 +329,7 @@ body:not(.dark-mode) .outline-group-header {
   list-style: none;
   padding: 0;
   margin: 0;
+  padding-left: 15px; 
 }
 
 /* 個々のノード項目 */
@@ -316,7 +337,8 @@ body:not(.dark-mode) .outline-group-header {
   display: flex;
   align-items: center;
   border-radius: 4px;
-  padding: 4px 8px 4px 24px; /* トグルの分、左をインデント */
+  padding: 4px 8px ; /* トグルの分、左をインデント */
+  padding-left: 26px;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -337,6 +359,44 @@ body:not(.dark-mode) .outline-node:hover {
   background-color: #eeeeee99;
   color: #111;
 }
+
+.outline-sub-node {
+  /* padding-left はJSで設定する */
+  padding: 2px 8px; 
+  font-size: 12px;
+  color: #aaa;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+body:not(.dark-mode) .outline-sub-node {
+  color: #555;
+}
+
+.outline-sub-node:hover {
+  background-color: #444; 
+  color: #eee;
+  cursor: pointer; 
+}
+
+body:not(.dark-mode) .outline-sub-node:hover {
+  background-color: #eeeeee99;
+  color: #111;
+}
+
+/* CSS側で、デフォルトでサブ階層を非表示にする */
+.outline-node-list > li > .outline-sub-node-list {
+  display: none;
+}
+
+/* そして、親が「選択された」ことを示すクラスが付いた時だけ表示する */
+.outline-node-list > li.is-active > .outline-sub-node-list {
+  display: block;
+}
+
 
 /* --- アイデアプロセッサのコンテンツエディタ用スクロールバー --- */
 

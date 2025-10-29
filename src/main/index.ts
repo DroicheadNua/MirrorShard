@@ -76,6 +76,17 @@ interface CanvasNode {
   height: number;
   title: string;
   parentId?: string | null; // 親グループのID。存在しない場合もあるのでオプショナルに。
+  isTemplateItem?: boolean;
+  placeholder?: string;
+}
+
+interface CanvasEdge {
+  id: string;
+  fromNode: string;
+  toNode: string;
+  label: string;
+  type: string; // 'line', 'arrow', 'double_arrow'
+  isTemplateItem?: boolean;
 }
 
 interface CanvasGroup {
@@ -85,6 +96,7 @@ interface CanvasGroup {
   width: number;
   height: number;
   label: string;
+  isTemplateRoot?: boolean;
 }
 
 const userDataPath = app.getPath('userData');
@@ -991,6 +1003,21 @@ async function parseMrsdFile(filePath: string) {
     if (!canvasJsonEntry) throw new Error('canvas.jsonが見つかりません。');
     const canvasData = JSON.parse(canvasJsonEntry.getData().toString('utf8'));
 
+    // もし、読み込んだデータに 'edges' が存在するなら、
+    // それを 'links' にリネームし、中身もrendererが期待する形に変換する
+    if (canvasData.edges && Array.isArray(canvasData.edges)) {
+      canvasData.links = canvasData.edges.map(edge => ({
+        id: edge.id,
+        from: edge.fromNode, // fromNode -> from
+        to: edge.toNode,     // toNode -> to
+        label: edge.label,
+        type: edge.type,
+        isTemplateItem: edge.isTemplateItem || false, // isTemplateItem も渡す
+      }));
+      // 元のedgesプロパティは削除
+      delete canvasData.edges;
+    }
+
     // 3. 各ノードの本文データを読み込む
     if (canvasData.nodes && Array.isArray(canvasData.nodes)) {
       for (const node of canvasData.nodes) {
@@ -1419,19 +1446,28 @@ ipcMain.handle('idea:saveFile', async (_event, filePath, saveData) => {
     // ★ 型定義を使って、canvasDataの型を明確にする
     const canvasData: {
       nodes: CanvasNode[]; // ★ ここで「CanvasNodeの配列です」と教える
-      edges: any[]; 
+      edges: CanvasEdge[];
       groups: CanvasGroup[];
       metadata: any;
     } = {
       nodes: [], // これで、この配列はCanvasNode[]型だと認識される
       edges: (saveData.links || []).map(link => ({ 
-        id: link.id, // ★ `edge_...`で再生成しない！
+        id: link.id, // ★ `edge_...`で再生成しない
         fromNode: link.from,
         toNode: link.to,
         label: link.label,
         type: link.type,
+        isTemplateItem: link.isTemplateItem || false,
       })),
-      groups: saveData.groups || [],
+      groups: (saveData.groups || []).map(group => ({
+        id: group.id,
+        x: group.x,
+        y: group.y,
+        width: group.width,
+        height: group.height,
+        label: group.label,
+        isTemplateRoot: group.isTemplateRoot || false, // ★ isTemplateRoot を追加
+      })),
       metadata: {
       createdAt: existingCreatedAt || new Date().toISOString(), // ★ 存在すれば再利用、なければ新規作成
       updatedAt: new Date().toISOString() // 更新日時も追加すると便利
@@ -1468,7 +1504,9 @@ ipcMain.handle('idea:saveFile', async (_event, filePath, saveData) => {
         width: node.width,
         height: node.height,
         title: node.title, // ★ タイトルはcanvas.jsonにも入れておくとプレビュー等で便利
-        parentId: node.parentId || null
+        parentId: node.parentId || null,
+        isTemplateItem: node.isTemplateItem || false,
+        placeholder: node.placeholder || undefined,
       });
     }
     

@@ -1,6 +1,6 @@
 {
   "name": "mirrorshard",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "MirrorShard",
   "main": "./out/main/index.js",
   "author": "DroicheadNua",

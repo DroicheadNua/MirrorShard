@@ -427,8 +427,10 @@ function openContentEditor(nodeGroup: Konva.Group) {
   }
   currentlyEditingNodeId = nodeGroup.id();
   let content = nodeGroup.getAttr('contentText') || '';
+  const placeholder = nodeGroup.getAttr('placeholder') || '';
   let isInitialContent = false;
-  if (!content.trim()) {
+  contentEditor.placeholder = placeholder;
+  if (!content.trim() && !placeholder) {
     content = 'New Content';
     isInitialContent = true;
   }  
@@ -634,6 +636,15 @@ outlinePane.addEventListener('click', (e) => {
             jumpToNode(nodeId);
         }
     }
+    else if (target.closest('.outline-sub-node')) {
+        const subNodeEl = target.closest('.outline-sub-node') as HTMLElement;
+        const parentId = subNodeEl.dataset.parentId;
+        const headingText = subNodeEl.dataset.headingText;
+        if (parentId && headingText) {
+            // ★ 親ノードのIDと、ジャンプ先の「見出しテキスト」を渡す
+            jumpToNode(parentId, headingText);
+        }
+    }    
 });
 
 /**
@@ -685,9 +696,53 @@ function renderIpOutline() {
             nodeList.style.display = 'none';
         }
 
-        nodes.filter(n => n.getAttr('parentId') === groupId).forEach(node => {
-            nodeList.appendChild(createOutlineNodeEl(node));
+nodes.filter(n => n.getAttr('parentId') === groupId).forEach(node => {
+    // 1. 親「##」ノードの<li>要素を作成
+    const parentLi = document.createElement('li');
+    parentLi.appendChild(createOutlineNodeEl(node)); 
+    nodeList.appendChild(parentLi);
+
+    // 2. 親ノードのcontentTextを解析
+    const content = node.getAttr('contentText') || '';
+    if (content) {
+        // 3. サブ階層を持つ<ul>を作成
+        const subList = document.createElement('ul');
+        subList.className = 'outline-sub-node-list';
+        
+        const lines = content.split('\n');
+        lines.forEach(line => {
+            let level = 0;
+            let text = '';
+
+            if (line.startsWith('#### ')) {
+                level = 4;
+                text = line.substring(5); // "#### " の後
+            } else if (line.startsWith('### ')) {
+                level = 3;
+                text = line.substring(4); // "### " の後
+            }
+            
+            if (level > 0) {
+                const subLi = document.createElement('li');
+                subLi.className = 'outline-sub-node';
+                subLi.textContent = text; 
+                subLi.dataset.parentId = node.id();
+                subLi.dataset.headingText = line;
+                
+                const baseIndent = 0; 
+                const increment = 15; // 1階層ごとの追加インデント
+                subLi.style.paddingLeft = `${baseIndent + (level - 3) * increment}px`;
+                
+                subList.appendChild(subLi);
+            }
         });
+        
+        // 4. もしサブ階層が一つでもあれば、それを親<li>に追加
+        if (subList.hasChildNodes()) {
+            parentLi.appendChild(subList);
+        }
+    }
+});
         groupWrapper.appendChild(nodeList);
         outlinePane.appendChild(groupWrapper);
     });
@@ -722,7 +777,9 @@ function renderIpOutline() {
         }
 
         orphanNodes.forEach(node => {
-            nodeList.appendChild(createOutlineNodeEl(node));
+            const li = document.createElement('li');
+            li.appendChild(createOutlineNodeEl(node));
+            nodeList.appendChild(li);
         });
         groupWrapper.appendChild(nodeList);
         outlinePane.appendChild(groupWrapper);
@@ -738,13 +795,25 @@ function createOutlineNodeEl(node: Konva.Group): HTMLElement {
     return nodeEl;
 }
 
+function setActiveOutlineNode(nodeId: string) {
+    // 1. まず、すべてのアクティブクラスを削除
+    outlinePane.querySelectorAll('.is-active').forEach(el => el.classList.remove('is-active'));
+    
+    // 2. 目的のノードに対応する要素を探し、クラスを追加
+    //    createOutlineNodeElが返す<div>にdata-idがあるので、その親(li)にクラスを付ける
+    const targetNodeEl = outlinePane.querySelector(`.outline-node[data-id="${nodeId}"]`);
+    targetNodeEl?.parentElement?.classList.add('is-active');
+}
+
 /**
  * 指定されたIDのノードが「表示領域の中央」に来るようにステージを移動する (最終確定版)
  * @param nodeId ジャンプ先のノードID
  */
-function jumpToNode(nodeId: string) {
+function jumpToNode(nodeId: string, targetHeading?: string) {
     const node = stage.findOne<Konva.Group>('#' + nodeId);
     if (!node) return;
+
+    setActiveOutlineNode(nodeId);
 
     // 1. キャンバスのコンテナ要素を取得
     const container = stage.container(); // '#ip-container'
@@ -777,6 +846,27 @@ function jumpToNode(nodeId: string) {
         y: newPos.y,
         easing: Konva.Easings.EaseInOut,
     }).play();
+
+    // 7. サブ階層へのジャンプ処理 
+    if (targetHeading) {
+        openContentEditor(node);
+        const editor = document.getElementById('ip-content-editor') as HTMLTextAreaElement;
+        
+        // requestAnimationFrameを使い、エディタが表示されるのを待つ
+        requestAnimationFrame(() => {
+            const text = editor.value;
+            const index = text.indexOf(targetHeading);
+            if (index !== -1) {
+                editor.focus();
+                editor.setSelectionRange(index, index);
+                // scrollIntoViewは不要な場合が多いが、保険として
+                const tempEl = document.createElement('span');
+                editor.before(tempEl);
+                tempEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                tempEl.remove();
+            }
+        });
+    }
 }
 
 // すべて開く・すべて閉じる
@@ -930,11 +1020,16 @@ stage.on('click tap dblclick dbltap', (e) => {
   if (selectedShape && selectedShape.name() === 'node-group' && clickedShape && (isCtrlOrCmd || isShift)) {
       const nodeToPair = selectedShape;
       const targetGroup = clickedShape;
-
+    if (nodeToPair.getAttr('isTemplateItem') || targetGroup.getAttr('isTemplateRoot')) {
+        // もし、移動させようとしているノードが「テンプレート部品」であるか、
+        // あるいは、移動先のグループが「テンプレートの親」である場合は、
+        // ペアリング/解除の操作を、一切許可しない。
+        return;
+    }
       // 【ペアリング解除: Shift + Click】
       if (isShift) {
           // もしノードがこのグループの子であれば、ペアリングを解除
-          if (nodeToPair.getParent() === targetGroup) {
+          if (nodeToPair.getParent() === targetGroup && !nodeToPair.getAttr('isTemplateItem')) {
               const pos = nodeToPair.absolutePosition();
               nodeToPair.moveTo(layer);
               nodeToPair.absolutePosition(pos); // グローバル位置を維持
@@ -1006,10 +1101,53 @@ window.addEventListener('keydown', (e) => {
   if (!isTextEditing && (e.key === 'Delete' || e.key === 'Backspace') && selectedShape) {
     e.preventDefault(); // デフォルトの動作（ブラウザの戻るなど）を抑制
 
+  if (selectedShape.getAttr('isTemplateItem')) {
+    return; 
+  }
+
   // --- グループノードが選択されている場合 ---
   if (selectedShape.name() === 'background-shape') {
     const groupToDelete = selectedShape;
-    
+
+    // もし、これがテンプレートのルートグループなら、中身ごと完全に削除
+    if (groupToDelete.getAttr('isTemplateRoot')) {
+        const groupId = groupToDelete.id();
+
+        // 1. 「データ」を元に、削除すべき子ノードをレイヤー全体から索敵する
+        const nodesToDelete = layer.find<Konva.Group>('.node-group').filter(
+            node => node.getAttr('parentId') === groupId
+        );
+        
+        // 2. それらの子ノードに接続されている「すべて」のリンクを収集
+        const linksToDestroy = new Set<Konva.Group>();
+        nodesToDelete.forEach(node => {
+            const links = node.getAttr('links') as Konva.Group[] | undefined;
+            if (links) {
+                // ★ 配列をコピーしてからループするのが、より安全
+                [...links].forEach(link => linksToDestroy.add(link));
+            }
+        });
+
+        // 3. リンクを、関連付けごと完全に破壊する
+        linksToDestroy.forEach(link => {
+            deleteLink(link); // ★ あなたが以前に完成させた、完璧なリンク削除関数を再利用
+        });
+
+        // 4. 子ノード自身を、一つずつ破壊する
+        nodesToDelete.forEach(node => {
+            node.destroy();
+        });
+        
+        // 5. すべての子孫が消え去った後、グループ自身を破棄する
+        groupToDelete.destroy();
+        
+        selectedShape = null;
+        layer.draw();
+        recordHistory('Template group deleted');
+        renderIpOutline(); // ★ アウトラインも更新する
+        return;
+    } 
+    else {
     // a) このグループに所属するすべての子ノードを取得
     //    Konvaの親子関係で直接 'find' するのが最も確実
     const children = groupToDelete.find<Konva.Group>('.node-group');
@@ -1030,6 +1168,7 @@ window.addEventListener('keydown', (e) => {
     layer.draw();
     recordHistory('Group deleted (children preserved)'); // 履歴のメッセージも明確に
     return; // ★ 処理完了
+    }
   }
 
     if (selectedShape.name() === 'node-group') {
@@ -1726,7 +1865,9 @@ function _getCurrentStageData() {
       title: textNode.text(),
       contentText: node.getAttr('contentText') || '',
       // ★★★ ここで parentId を確実に取得・保存します ★★★
-      parentId: node.getAttr('parentId') || null 
+      parentId: node.getAttr('parentId') || null ,
+      isTemplateItem: node.getAttr('isTemplateItem') || false,
+      placeholder: node.getAttr('placeholder') || undefined,
     });
   });
 
@@ -1745,6 +1886,7 @@ function _getCurrentStageData() {
       width: rect.width(),
       height: rect.height(),
       label: label.text(),
+      isTemplateRoot: group.getAttr('isTemplateRoot') || false
     });
   });
 
@@ -1767,6 +1909,7 @@ function _getCurrentStageData() {
         to: nodes[1].id(),
         type: type,
         label: label ? label.text() : '',
+        isTemplateItem: linkGroup.getAttr('isTemplateItem') || false
       });
     }
   });
@@ -1862,6 +2005,9 @@ function recreateStage(data: any) {
         // `createGroupFromData`は、内部で`createBackgroundShape`を呼び出し、
         // そこでリスナーも設定されるので、これで正しい
         const group = createGroupFromData(groupData);
+        if (groupData.isTemplateRoot) {
+          group.setAttr('isTemplateRoot', true);
+        }        
         createdGroups.set(group.id(), group); // マップに追加
       });
     }
@@ -1870,7 +2016,15 @@ function recreateStage(data: any) {
     if (data.nodes && Array.isArray(data.nodes)) {
       data.nodes.forEach(nodeData => {
         const nodeGroup = createNodeFromData(nodeData);
-        nodeGroup.setAttr('contentText', nodeData.contentText || '');
+      if (nodeData.isTemplateItem) {
+        nodeGroup.setAttr('isTemplateItem', true);
+      }
+      if (nodeData.placeholder) {
+        nodeGroup.setAttr('placeholder', nodeData.placeholder);
+      }        
+        nodeGroup.setAttr('contentText', nodeData.contentText || '');      
+      // isSelectedはfalseなので、これでテンプレート色かどうかが正しく判定される
+      updateNodeVisuals(nodeGroup, false); 
         // parentIdを属性として一時保存
       if (nodeData.parentId) {
         nodeGroup.setAttr('parentId', nodeData.parentId);
@@ -1907,10 +2061,17 @@ function recreateStage(data: any) {
               const lg2 = createSingleLink(toNode, fromNode, LinkType.ARROW, '');
               lg1.setAttr('sibling', lg2); lg2.setAttr('sibling', lg1);
               lg1.setAttr('linkType', LinkType.DOUBLE_ARROW); lg2.setAttr('linkType', LinkType.DOUBLE_ARROW);
+              if (linkData.isTemplateItem) {
+                  lg1.setAttr('isTemplateItem', true);
+                  lg2.setAttr('isTemplateItem', true);
+              }              
           } else {
-              createSingleLink(fromNode, toNode, linkData.type, linkData.label);
+              const link = createSingleLink(fromNode, toNode, linkData.type, linkData.label);          
+              if (linkData.isTemplateItem) {
+                link.setAttr('isTemplateItem', true);
+              }          
+            }
           }
-        }
       });
     }
     //　力技
@@ -2002,7 +2163,275 @@ window.addEventListener('click', () => {
   if (!exportMenu.classList.contains('hidden')) {
     exportMenu.classList.add('hidden');
   }
+  if (!templateMenu.classList.contains('hidden')) {
+    templateMenu.classList.add('hidden');
+  }  
 });
+
+// テンプレート関連
+
+const templateButton = document.getElementById('ip-template-button')!;
+const templateMenu = document.getElementById('ip-template-menu')!;
+
+templateButton.addEventListener('click', (e) => {
+  e.stopPropagation(); 
+  templateMenu.classList.toggle('hidden');
+});
+
+templateMenu.addEventListener('click', (e) => {
+  // 1. クリックされた要素が、本当に .template-item かどうかを確認
+  const target = e.target as HTMLElement;
+  const templateItem = target.closest('.template-item');
+
+  if (templateItem) {
+    // 2. data-template 属性から、どのテンプレートが選ばれたかを取得
+    const templateName = (templateItem as HTMLElement).dataset.template;
+
+    if (templateName) {
+      // 3. テンプレートを生成する関数を呼び出す
+      generateTemplate(templateName);
+    }
+
+    // 4. 処理を実行したら、メニューを閉じる
+    templateMenu.classList.add('hidden');
+  }
+});
+
+/**
+ * 指定された名前のテンプレートをキャンバスに生成する
+ * @param templateName 'greimas' | 'heros-journey' など
+ */
+function generateTemplate(templateName: string) {
+  // グレマスの行為者モデル Actantial model
+if (templateName === 'greimas') {
+    const group = createBackgroundShape({ x: 110, y: 100 });
+    group.setAttr('isTemplateRoot', true);
+    group.findOne<Konva.Text>('Text')?.text('行為者モデル');
+    group.findOne<Konva.Rect>('.background')?.size({ width: 650, height: 350 });
+
+    const FONT_SIZE = 14; // 可読性のためのフォントサイズ調整
+
+    // --- ノードの定義 ---
+    const sujet = createTemplateNode({ x: 400, y: 320, title: '主体', placeholder: '主人公は誰か？' });
+    const objet = createTemplateNode({ x: 400, y: 170, title: '対象', placeholder: '主人公が追い求める宝物' });
+    const destinateur = createTemplateNode({ x: 170, y: 170, title: '送り手', placeholder: '誰が使命を与えたか？' });
+    const destinataire = createTemplateNode({ x: 630, y: 170, title: '受け手', placeholder: '誰が宝物を得るのか？' });
+    const adjuvant = createTemplateNode({ x: 170, y: 320, title: '援助者', placeholder: '主人公を助ける仲間や道具' });
+    const opposant = createTemplateNode({ x: 630, y: 320, title: '敵対者', placeholder: '主人公を妨害する敵対者' });
+    
+    // --- ペアリング ---
+    const nodes = [sujet, objet, destinateur, destinataire, adjuvant, opposant];
+    nodes.forEach(node => {
+        // フォントサイズを調整
+        node.findOne<Konva.Text>('.text')?.fontSize(FONT_SIZE);
+        
+        const pos = node.absolutePosition();
+        node.moveTo(group);
+        node.absolutePosition(pos);
+        node.setAttr('parentId', group.id());
+        updateNodeVisuals(node, false); // 色を確定
+    });
+
+    // --- リンクの定義 ---
+    const createTemplateLink = (from: Konva.Group, to: Konva.Group) => {
+        const link = createSingleLink(from, to, LinkType.ARROW, '');
+        link.setAttr('isTemplateItem', true);
+    };
+    
+    createTemplateLink(sujet, objet);
+    createTemplateLink(destinateur, objet);
+    createTemplateLink(objet, destinataire);
+    createTemplateLink(adjuvant, sujet);
+    createTemplateLink(opposant, sujet);
+
+    recordHistory('Template created: Greimas');
+}
+ // 英雄の旅 Hero's Journey
+  else if (templateName === 'heros-journey') {
+    // 1. テンプレート全体を囲む、親グループを作成
+    const group = createBackgroundShape({ x: 50, y: 50 });
+    group.setAttr('isTemplateRoot', true);
+    group.findOne<Konva.Text>('Text')?.text("英雄の旅 (Hero's Journey)");
+    group.findOne<Konva.Rect>('.background')?.size({ width: 900, height: 700 });
+
+    // 2. 円環レイアウトのための定数を定義
+    const steps = 12;
+    const centerX = 450;
+    const centerY = 350;
+    const radiusX = 380;
+    const radiusY = 280;
+
+    // 3. 12ステップのデータを定義
+    const journeyData = [
+      { title: '1. 日常の世界', placeholder: '主人公は誰で、どんな日常を送っているか？' },
+      { title: '2. 冒険への誘い', placeholder: 'その日常を揺るがす、最初の「事件」は何か？' },
+      { title: '3. 冒険の拒絶', placeholder: '主人公はなぜ、その誘いをためらうのか？' },
+      { title: '4. 賢者との\n　 出会い', placeholder: '誰が、あるいは何が、主人公の背中を押すのか？' },
+      { title: '5. 第一関門の突破', placeholder: '主人公が、もう後戻りできないと決意する瞬間は？' },
+      { title: '6. 試練、仲間、敵', placeholder: '新しい世界で、主人公はどんな試練に直面するか？' },
+      { title: '7. 最も危険な場所へ', placeholder: '物語の核心、最大の試練が待つ場所へ。' },
+      { title: '8. 最大の試練', placeholder: '主人公が、死に直面するほどの、最も過酷な試練。' },
+      { title: '9. 報酬', placeholder: '最大の試練を乗り越え、主人公は何を手に入れたか？' },
+      { title: '10. 帰路', placeholder: '手に入れた「報酬」を持って、日常の世界へ戻る旅路。' },
+      { title: '11. 復活', placeholder: '主人公が、旅で得た力や知恵で、最後の敵を打ち破る。' },
+      { title: '12. 宝物との帰還', placeholder: '主人公が日常へ帰還し、世界を、あるいは自身をどう変えたか？' },
+    ];
+
+    const createdNodes: Konva.Group[] = [];
+
+    // 4. データを元に、円環状にノードを生成・配置
+    journeyData.forEach((data, i) => {
+      const angle = (i / steps) * 2 * Math.PI - (Math.PI / 2); // 12時方向から開始
+      const nodeX = centerX + radiusX * Math.cos(angle);
+      const nodeY = centerY + radiusY * Math.sin(angle);
+
+      const node = createTemplateNode({ x: nodeX, y: nodeY, title: data.title, placeholder: data.placeholder });
+      createdNodes.push(node);
+    });
+
+    // 5. すべてのノードを、親グループに所属させる (ペアリング)
+    createdNodes.forEach(node => {
+      const pos = node.absolutePosition();
+      node.moveTo(group);
+      node.absolutePosition(pos);
+      node.setAttr('parentId', group.id());
+      updateNodeVisuals(node, false);
+    });
+
+    // 6. ノード間に、順番に矢印リンクを作成
+    for (let i = 0; i < createdNodes.length; i++) {
+      const fromNode = createdNodes[i];
+      const toNode = createdNodes[(i + 1) % createdNodes.length]; // 最後は12→1に繋がる
+      const link = createSingleLink(fromNode, toNode, LinkType.ARROW, '');
+      link.setAttr('isTemplateItem', true);
+    }
+
+    recordHistory("Template created: Hero's Journey");
+  }
+ // エッセンシャル・ビートシート The Essential Beat Sheet
+  else if (templateName === 'beat-sheet') {
+    const group = createBackgroundShape({ x: 50, y: 50 });
+    group.setAttr('isTemplateRoot', true);
+    group.findOne<Konva.Text>('Text')?.text("エッセンシャル・ビートシート");
+    group.findOne<Konva.Rect>('.background')?.size({ width: 1050, height: 550 });
+    
+    const beatData = [
+      { title: '1. オープニング', placeholder: '物語のテーマと、主人公の「ビフォー」の状態を、一枚の絵で見せるようなシーンは？' },
+      { title: '2. 事件の発生', placeholder: 'その日常を破壊し、主人公を物語へと強制的に引きずり込む「事件」は何か？' },
+      { title: '3. 決意', placeholder: 'なぜ、主人公は「もう後戻りできない」と決断するのか？ 非日常の世界へ足を踏み入れる。' },
+      { title: '4. 新しい世界', placeholder: '主人公が飛び込んだ非日常の世界。そこで出会う、仲間、敵、そして、この世界の「ルール」は何か？' },
+      { title: '5. 中盤の偽りの勝利', placeholder: '物語の中間点。主人公は、目的を達成したかのように見える。しかし、それは本当の解決ではない。' },
+      { title: '6. 絶望の淵', placeholder: '偽りの勝利は崩れ去り、主人公はすべてを失う。物語の最も暗い瞬間。' },
+      { title: '7. 内なる気づき', placeholder: '絶望の底で、主人公が発見する「真実」は何か？ 自分の弱さと向き合い、本当に「必要なこと」に気づく。' },
+      { title: '8. 反撃の計画', placeholder: '新たな気づきを得た主人公が、最後の戦いに向けて、決死の計画を立てる。' },
+      { title: '9. クライマックス', placeholder: '計画を実行し、最大の敵と対決する。旅を通して学んだ、新しい「力」が試される。' },
+      { title: '10. 最後のひねり', placeholder: 'すべてが終わったかと思った瞬間、最後の障害、あるいは、驚くべき真実が明らかになる。' },
+      { title: '11. 最終的な解決', placeholder: '主人公が、その最後の障害をも乗り越え、物語のすべての問題に、真の「決着」をつける。' },
+      { title: '12. エンディング', placeholder: '物語の後の世界。主人公は、どのように「変化」したか？オープニングとは対になる、最後の一枚の絵。' },
+    ];
+
+    const createdNodes: Konva.Group[] = [];
+    const positions = [
+      { x: 79, y: 103 }, { x: 303, y: 146 }, { x: 510, y: 107 }, { x: 711, y: 68 },
+      { x: 902, y: 156 }, { x: 798, y: 338 }, { x: 537, y: 278 }, { x: 284, y: 291 },
+      { x: 87, y: 393 }, { x: 237, y: 518 }, { x: 505, y: 472 }, { x: 815, y: 494 },
+    ];
+
+    beatData.forEach((data, i) => {
+      const node = createTemplateNode({
+        x: positions[i].x,
+        y: positions[i].y,
+        title: data.title,
+        placeholder: data.placeholder
+      });
+      node.findOne<Konva.Rect>('.background')?.width(180);
+      createdNodes.push(node);
+    });
+
+    createdNodes.forEach(node => {
+      const pos = node.absolutePosition();
+      node.moveTo(group);
+      node.absolutePosition(pos);
+      node.setAttr('parentId', group.id());
+      updateNodeVisuals(node, false);
+    });
+    
+    // リンクを作成 
+    const createTemplateLink = (fromIndex: number, toIndex: number) => {
+        const link = createSingleLink(createdNodes[fromIndex], createdNodes[toIndex], LinkType.ARROW, '');
+        link.setAttr('isTemplateItem', true);
+    };
+    
+    for (let i = 0; i < 11; i++) createTemplateLink(i, i + 1); 
+
+    recordHistory("Template created: Beat Sheet");
+  }
+  // 三幕構成 Three Act Structure
+  else if (templateName === 'three-act-structure') {
+      const group = createBackgroundShape({ x: 100, y: 100 });
+      group.setAttr('isTemplateRoot', true);
+      group.findOne<Konva.Text>('Text')?.text("三幕構成");
+      group.findOne<Konva.Rect>('.background')?.size({ width: 800, height: 250 });
+
+      const actData = [
+        { title: '第一幕：発端 (Beginning)', placeholder: '物語の世界観と主人公を紹介し、最初の事件（インサイティング・インシデント）が起こるまでのパート。全体の約25%。' },
+        { title: '第二幕：葛藤 (Middle)', placeholder: '主人公が障害に直面し、試行錯誤し、成長（あるいは堕落）していく、物語で最も長いパート。全体の約50%。' },
+        { title: '第三幕：結末 (End)', placeholder: '物語のクライマックスと、その後の結末を描く、最後のパート。全体の約25%。' },
+      ];
+      
+      const createdNodes: Konva.Group[] = [];
+      actData.forEach((data, i) => {
+        const node = createTemplateNode({
+          x: 150 + i * 250, // 横に並べる
+          y: 150,
+          title: data.title,
+          placeholder: data.placeholder,
+        });
+        node.findOne<Konva.Rect>('.background')?.size({width: 200, height: 100});
+        createdNodes.push(node);
+      });
+
+      createdNodes.forEach(node => {
+        const pos = node.absolutePosition();
+        node.moveTo(group);
+        node.absolutePosition(pos);
+        node.setAttr('parentId', group.id());
+        updateNodeVisuals(node, false);
+      });
+      
+      createSingleLink(createdNodes[0], createdNodes[1], LinkType.ARROW, '').setAttr('isTemplateItem', true);
+      createSingleLink(createdNodes[1], createdNodes[2], LinkType.ARROW, '').setAttr('isTemplateItem', true);
+
+      recordHistory("Template created: Three-Act Structure");
+    }  
+}
+
+/**
+ * テンプレート専用の、色と属性が設定されたノードを作成するヘルパー関数
+ */
+function createTemplateNode(options: { x: number, y: number, title: string, placeholder: string }): Konva.Group {
+  // 1. buildNodeを流用して、基本のノードを作成
+  const nodeGroup = buildNode({
+    id: `node_${Date.now()}${Math.random()}`,
+    x: options.x,
+    y: options.y,
+    text: options.title,
+    width: 120, // テンプレート用の固定幅
+  });
+
+  // 2. 特殊な属性とスタイルを設定
+  nodeGroup.setAttr('isTemplateItem', true); // ★ 削除・ペアリング解除不可の目印
+  nodeGroup.setAttr('placeholder', options.placeholder); // ★ placeholderを保持
+
+  // ★ 特殊な色を背景に設定 (テーマに応じて)
+  const colors = getCurrentThemeColors();
+  const templateColor = colors.templateBg; 
+  nodeGroup.findOne<Konva.Rect>('.background')?.fill(templateColor);
+  
+  return nodeGroup;
+}
+
+
 
 // --- ★ テーマ情報をJavaScriptで一元管理 ---
 const themes = {
@@ -2013,7 +2442,8 @@ const themes = {
     nodeBg: 'transparent', 
     labelBackground:'#cccccc',
 //    pairedBorder: '#888888',
-    pairedBg: 'rgba(120, 120, 120, 0.2)'
+    pairedBg: 'rgba(120, 120, 120, 0.2)',
+    templateBg:'rgba(229, 174, 24, 0.3)'
   },
   dark: {
     text: '#cccccc', 
@@ -2022,7 +2452,8 @@ const themes = {
     nodeBg: 'transparent',
     labelBackground:'#444444',
 //    pairedBorder: '#cccccc', 
-    pairedBg: 'rgba(155, 155, 155, 0.3)'
+    pairedBg: 'rgba(155, 155, 155, 0.3)',
+    templateBg:'rgba(43, 136, 216, 0.3)'
   }
 };
 
@@ -2045,6 +2476,7 @@ function updateNodeVisuals(nodeGroup: Konva.Group, isSelected: boolean) {
 
     const colors = getCurrentThemeColors();
     const isPaired = !!nodeGroup.getAttr('parentId');
+    const isTemplateItem = !!nodeGroup.getAttr('isTemplateItem');
 
     // 枠線は常に無効
     backgroundRect.strokeEnabled(false);
@@ -2053,6 +2485,8 @@ function updateNodeVisuals(nodeGroup: Konva.Group, isSelected: boolean) {
     if (isSelected) {
         const selectionRgb = Konva.Util.getRGB(colors.selection);
         backgroundRect.fill(`rgba(${selectionRgb.b}, ${selectionRgb.g}, ${selectionRgb.r}, 0.3)`);
+    } else if (isTemplateItem) {
+        backgroundRect.fill(colors.templateBg);         
     } else if (isPaired) {
         backgroundRect.fill(colors.pairedBg);
     } else {
@@ -3096,6 +3530,8 @@ window.electronAPI.onThemeUpdated((isDarkMode) => {
   window.electronAPI.on('load-data', (payload) => {
     const { filePath, data } = payload;
     console.log('ロードデータを受信しました:', filePath, data);
+    const outlinePane = document.getElementById('ip-outline-pane')!;
+    outlinePane.classList.add('hidden');    
     isHistoryEnabled = false;    
     currentFilePath = filePath;
     _updateTitle();     
@@ -3110,6 +3546,8 @@ window.electronAPI.onThemeUpdated((isDarkMode) => {
 
 // `main`からの`file:new`通知を受け取るリスナー
 window.electronAPI.on('file:new', (newFilePath: string) => {
+  const outlinePane = document.getElementById('ip-outline-pane')!;
+  outlinePane.classList.add('hidden');  
   // ★ `main`から、新しく作られた`Untitled.mrsd`のパスを受け取る
   currentFilePath = newFilePath;
   layer.destroyChildren();
