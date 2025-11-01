@@ -81,8 +81,6 @@ let selectionJustFinished = false;
 const outlinePane = document.getElementById('ip-outline-content')!;
 // ファイルごとではなく、単一の折りたたみ状態を管理
 const outlineCollapsedState = new Map<string, boolean>(); // key: groupId, value: isCollapsed
-const aiButton = document.getElementById('ip-ai-cot-btn') as HTMLButtonElement;
-const isAiThinking = aiButton.disabled;
 
 // =================================================================
 // ★ 主要な関数（リファクタリング済み）
@@ -672,6 +670,62 @@ outlinePane.addEventListener('click', (e) => {
     }    
 });
 
+// (renderIpOutline 関数の「内部」または、そのすぐ上に、この新しい関数を追加)
+
+/**
+ * 指定されたノードと、そのサブ階層（###, ####）を、
+ * アウトラインのリスト要素として生成し、コンテナに追加する
+ * @param node 描画するKonvaノード
+ * @param containerElement ノードが追加される親の<ul>要素
+ */
+function renderNodeWithSubheadings(node: Konva.Group, containerElement: HTMLElement) {
+    // 1. 親「##」ノードの<li>要素を作成
+    const parentLi = document.createElement('li');
+    parentLi.appendChild(createOutlineNodeEl(node));
+    containerElement.appendChild(parentLi);
+
+    // 2. 親ノードのcontentTextを解析
+    const content = node.getAttr('contentText') || '';
+    if (content) {
+        // 3. サブ階層を持つ<ul>を作成
+        const subList = document.createElement('ul');
+        subList.className = 'outline-sub-node-list';
+        
+        const lines = content.split('\n');
+        lines.forEach(line => {
+            let level = 0;
+            let text = '';
+
+            if (line.startsWith('#### ')) {
+                level = 4;
+                text = line.substring(5);
+            } else if (line.startsWith('### ')) {
+                level = 3;
+                text = line.substring(4);
+            }
+            
+            if (level > 0) {
+                const subLi = document.createElement('li');
+                subLi.className = 'outline-sub-node';
+                subLi.textContent = text;
+                subLi.dataset.parentId = node.id();
+                subLi.dataset.headingText = line;
+                
+                const baseIndent = 15;
+                const increment = 15;
+                subLi.style.paddingLeft = `${baseIndent + (level - 2) * increment}px`;
+                
+                subList.appendChild(subLi);
+            }
+        });
+        
+        // 4. もしサブ階層が一つでもあれば、それを親<li>に追加
+        if (subList.hasChildNodes()) {
+            parentLi.appendChild(subList);
+        }
+    }
+}
+
 /**
  * アウトラインパネルの内容を現在のステージの状態に基づいて再描画する
  */
@@ -721,53 +775,10 @@ function renderIpOutline() {
             nodeList.style.display = 'none';
         }
 
-nodes.filter(n => n.getAttr('parentId') === groupId).forEach(node => {
-    // 1. 親「##」ノードの<li>要素を作成
-    const parentLi = document.createElement('li');
-    parentLi.appendChild(createOutlineNodeEl(node)); 
-    nodeList.appendChild(parentLi);
-
-    // 2. 親ノードのcontentTextを解析
-    const content = node.getAttr('contentText') || '';
-    if (content) {
-        // 3. サブ階層を持つ<ul>を作成
-        const subList = document.createElement('ul');
-        subList.className = 'outline-sub-node-list';
-        
-        const lines = content.split('\n');
-        lines.forEach(line => {
-            let level = 0;
-            let text = '';
-
-            if (line.startsWith('#### ')) {
-                level = 4;
-                text = line.substring(5); // "#### " の後
-            } else if (line.startsWith('### ')) {
-                level = 3;
-                text = line.substring(4); // "### " の後
-            }
-            
-            if (level > 0) {
-                const subLi = document.createElement('li');
-                subLi.className = 'outline-sub-node';
-                subLi.textContent = text; 
-                subLi.dataset.parentId = node.id();
-                subLi.dataset.headingText = line;
-                
-                const baseIndent = 0; 
-                const increment = 15; // 1階層ごとの追加インデント
-                subLi.style.paddingLeft = `${baseIndent + (level - 3) * increment}px`;
-                
-                subList.appendChild(subLi);
-            }
+        nodes.filter(n => n.getAttr('parentId') === groupId).forEach(node => {
+            renderNodeWithSubheadings(node, nodeList);
         });
-        
-        // 4. もしサブ階層が一つでもあれば、それを親<li>に追加
-        if (subList.hasChildNodes()) {
-            parentLi.appendChild(subList);
-        }
-    }
-});
+
         groupWrapper.appendChild(nodeList);
         outlinePane.appendChild(groupWrapper);
     });
@@ -802,10 +813,9 @@ nodes.filter(n => n.getAttr('parentId') === groupId).forEach(node => {
         }
 
         orphanNodes.forEach(node => {
-            const li = document.createElement('li');
-            li.appendChild(createOutlineNodeEl(node));
-            nodeList.appendChild(li);
+            renderNodeWithSubheadings(node, nodeList);
         });
+        
         groupWrapper.appendChild(nodeList);
         outlinePane.appendChild(groupWrapper);
     }
@@ -954,6 +964,8 @@ const resetStyle = (shape: Konva.Group) => {
 
 // ノード選択、リンク、編集、新規作成を担う統合イベントハンドラ
 stage.on('click tap dblclick dbltap', (e) => {
+  const aiButton = document.getElementById('ip-ai-cot-btn') as HTMLButtonElement;
+  const isAiThinking = aiButton.disabled;  
   if (isContentEditing || isAiThinking) return;
   if (selectionJustFinished) {
     selectionJustFinished = false; // フラグを消費して
@@ -2751,9 +2763,11 @@ async function triggerChainOfThought() {
     const charLimit = await window.electronAPI.getStoreValue('cotCharLimit', 30);
     const nodeTitle = selectedNode.findOne<Konva.Text>('.text')?.text() || '';
     const prompt = `「${nodeTitle}」というアイデアに続く、創造的で、**1つあたり${charLimit}文字以内**のアイデアを3つ、改行で区切って生成してください。余計な前置きや説明は不要です。`;
-
+    const aiButton = document.getElementById('ip-ai-cot-btn') as HTMLButtonElement;
     try {
       aiButton.disabled = true;
+      updateButtonInteractivity(true); 
+      stage.container().style.cursor = 'wait';      
         const selectedApi = await window.electronAPI.getStoreValue('selectedApi', 'gemini');
         let result;
 
@@ -2825,6 +2839,7 @@ async function triggerChainOfThought() {
         window.electronAPI.showInfoDialog(`AIとの通信に失敗しました: ${error}`);
     } finally {
         aiButton.disabled = false;
+        updateButtonInteractivity(false);
         // 6. カーソルを元に戻す
         stage.container().style.cursor = 'default';
     }
@@ -3066,6 +3081,8 @@ let lastRectPos: { x: number; y: number };
 
 // 4. イベントハンドラ
 stage.on('mousedown', (e) => {
+  const aiButton = document.getElementById('ip-ai-cot-btn') as HTMLButtonElement;
+  const isAiThinking = aiButton.disabled;  
   if (isContentEditing || isAiThinking) return;
   // 条件: 左クリック(0) かつ 背景がクリックされた場合
   if (e.evt.button === 0 && (e.target === stage || e.target.name() === 'background')) {
@@ -3081,6 +3098,8 @@ stage.on('mousedown', (e) => {
 });
 
 stage.on('mousemove', (e) => {
+  const aiButton = document.getElementById('ip-ai-cot-btn') as HTMLButtonElement;
+  const isAiThinking = aiButton.disabled;  
   if (isContentEditing || isAiThinking) return;
   if (!selectionStartPos) return;
   e.evt.preventDefault();
@@ -3151,6 +3170,9 @@ stage.on('mouseup', (e) => {
 
   // --- 2. 右クリックでのコンテンツエディタ表示 ---
   if (e.evt.button === 2) {
+    const aiButton = document.getElementById('ip-ai-cot-btn') as HTMLButtonElement;
+    const isAiThinking = aiButton && aiButton.disabled;
+    if (isAiThinking) return;    
     if (!didPan) { // パンが発生しなかった場合
       const clickedNode = e.target.findAncestor('.node-group');
       if (clickedNode) {
@@ -3211,6 +3233,8 @@ selectionRect.on('dragend', () => {
 });
 
 stage.on('mousedown', (e) => {
+  const aiButton = document.getElementById('ip-ai-cot-btn') as HTMLButtonElement;
+  const isAiThinking = aiButton.disabled;  
   if (isAiThinking) return;
     if (e.evt.button === 2 && isContentEditing ) {
       e.evt.preventDefault();
@@ -3235,6 +3259,8 @@ stage.on('mousedown', (e) => {
 });
 
 stage.on('mousemove', (_e) => {
+  const aiButton = document.getElementById('ip-ai-cot-btn') as HTMLButtonElement;
+  const isAiThinking = aiButton.disabled;  
   if (isContentEditing || isAiThinking) return;
   if (!isPanning) return;
   

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.4.0] - 2025-11-XX  
+## [1.4.0] - 2025-11-1  
 
 ### Added (新機能)  
 - AIによる発想支援 (Chain of Thought): アイデアプロセッサでノードを選択し、`🧠`ボタンを押すことで、選択したノードから連想される3つの新しいアイデアをAIが提案する機能を追加しました。  
