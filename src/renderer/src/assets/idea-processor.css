@@ -436,3 +436,11 @@ body:not(.dark-mode) #ip-content-editor::-webkit-scrollbar-thumb:hover {
   opacity: 0.5;  
   transition: opacity 0.2s ease-in-out;
 }
+
+#ip-ai-cot-btn{
+  padding: 0;
+}
+#ip-ai-cot-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed; /* 操作不可であることを示すカーソル */
+}

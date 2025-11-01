@@ -16,6 +16,11 @@ type Vector2d = {
   y: number;
 };
 
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
 export function initializeIdeaProcessor() {
     if (isInitialized) {
     console.warn("initializeIdeaProcessor was called more than once. Aborting subsequent calls.");
@@ -76,6 +81,8 @@ let selectionJustFinished = false;
 const outlinePane = document.getElementById('ip-outline-content')!;
 // ファイルごとではなく、単一の折りたたみ状態を管理
 const outlineCollapsedState = new Map<string, boolean>(); // key: groupId, value: isCollapsed
+const aiButton = document.getElementById('ip-ai-cot-btn') as HTMLButtonElement;
+const isAiThinking = aiButton.disabled;
 
 // =================================================================
 // ★ 主要な関数（リファクタリング済み）
@@ -99,7 +106,7 @@ function createNewNode(pos: Vector2d, target: Konva.Node) {
 
   // ダブルクリックされたのがグループノードの背景か、その子孫か？
   const parentGroup = target.findAncestor('.background-shape');
-  if (parentGroup) {
+  if (parentGroup && !parentGroup.getAttr('isTemplateRoot')) {
     nodeGroup.moveTo(parentGroup);
     nodeGroup.setAttr('parentId', parentGroup.id());
     updateNodeVisuals(nodeGroup, false);
@@ -410,6 +417,23 @@ function updateButtonInteractivity(isEditing: boolean) {
   }
 }
 
+/**
+ * 指定されたノードと、それに接続されているすべてのリンクを安全に削除する
+ * @param nodeToDelete 削除するノード
+ */
+function deleteNodeAndConnectedLinks(nodeToDelete: Konva.Group) {
+    // 1. ノードに接続されているリンクの「コピー」を取得
+    const links = [...(nodeToDelete.getAttr('links') as Konva.Group[] || [])];
+
+    // 2. 各リンクを、安全なdeleteLink関数で削除
+    links.forEach(link => {
+        deleteLink(link); // (あなたが以前に完成させた、完璧なリンク削除関数)
+    });
+    
+    // 3. すべてのリンクが消えた後、ノード自身を破棄
+    nodeToDelete.destroy();
+}
+
 //　コンテンツエディタ用
 
 /**
@@ -479,6 +503,7 @@ function saveContentChanges() {
     if (oldText !== newText) {
       node.setAttr('contentText', newText);
       recordHistory('Node content changed');
+      renderIpOutline();
     }
   }
 }
@@ -929,7 +954,7 @@ const resetStyle = (shape: Konva.Group) => {
 
 // ノード選択、リンク、編集、新規作成を担う統合イベントハンドラ
 stage.on('click tap dblclick dbltap', (e) => {
-  if (isContentEditing) return;
+  if (isContentEditing || isAiThinking) return;
   if (selectionJustFinished) {
     selectionJustFinished = false; // フラグを消費して
     return; // 処理を中断
@@ -1098,101 +1123,134 @@ stage.on('click tap dblclick dbltap', (e) => {
 // ノード/リンク削除 (Del/Backspace)
 window.addEventListener('keydown', (e) => {
   // テキスト編集中でなければ削除処理を実行
-  if (!isTextEditing && (e.key === 'Delete' || e.key === 'Backspace') && selectedShape) {
+  if (!isTextEditing && (e.key === 'Delete' || e.key === 'Backspace')) {
     e.preventDefault(); // デフォルトの動作（ブラウザの戻るなど）を抑制
 
-  if (selectedShape.getAttr('isTemplateItem')) {
-    return; 
-  }
-
-  // --- グループノードが選択されている場合 ---
-  if (selectedShape.name() === 'background-shape') {
-    const groupToDelete = selectedShape;
-
-    // もし、これがテンプレートのルートグループなら、中身ごと完全に削除
-    if (groupToDelete.getAttr('isTemplateRoot')) {
-        const groupId = groupToDelete.id();
-
-        // 1. 「データ」を元に、削除すべき子ノードをレイヤー全体から索敵する
-        const nodesToDelete = layer.find<Konva.Group>('.node-group').filter(
-            node => node.getAttr('parentId') === groupId
-        );
+    // --- 優先度1: 複数ノードの一括削除 ---
+    if (selectedNodes.length > 0) {
+        let changed = false;
         
-        // 2. それらの子ノードに接続されている「すべて」のリンクを収集
-        const linksToDestroy = new Set<Konva.Group>();
-        nodesToDelete.forEach(node => {
-            const links = node.getAttr('links') as Konva.Group[] | undefined;
-            if (links) {
-                // ★ 配列をコピーしてからループするのが、より安全
-                [...links].forEach(link => linksToDestroy.add(link));
-            }
-        });
+        // 1. 削除されるべきノードを「フィルタリング」する
+        const nodesToDelete = selectedNodes.filter(node => !node.getAttr('isTemplateItem'));
 
-        // 3. リンクを、関連付けごと完全に破壊する
-        linksToDestroy.forEach(link => {
-            deleteLink(link); // ★ あなたが以前に完成させた、完璧なリンク削除関数を再利用
-        });
-
-        // 4. 子ノード自身を、一つずつ破壊する
-        nodesToDelete.forEach(node => {
-            node.destroy();
-        });
+        if (nodesToDelete.length > 0) {
+            // 2. フィルタリングされたノードだけを、一つずつ安全に削除
+            nodesToDelete.forEach(node => {
+                // リンクも一緒に削除するためのヘルパー関数を呼び出す
+                deleteNodeAndConnectedLinks(node);
+                changed = true;
+            });
+        }
         
-        // 5. すべての子孫が消え去った後、グループ自身を破棄する
-        groupToDelete.destroy();
+        // 3. 操作完了後、複数選択状態を解除
+        transformer.nodes([]);
+        selectionRect.visible(false);
+        selectedNodes = [];
         
-        selectedShape = null;
+        if (changed) {
+            recordHistory('Deleted multiple nodes');
+            renderIpOutline();
+        }
         layer.draw();
-        recordHistory('Template group deleted');
-        renderIpOutline(); // ★ アウトラインも更新する
         return;
-    } 
-    else {
-    // a) このグループに所属するすべての子ノードを取得
-    //    Konvaの親子関係で直接 'find' するのが最も確実
-    const children = groupToDelete.find<Konva.Group>('.node-group');
-
-    // b) 各子ノードのペアリングを解除
-    //    配列をコピー([...children])してからループするのが安全
-    [...children].forEach(node => {
-        const pos = node.absolutePosition();
-        node.moveTo(layer); // ルートレイヤーに移動
-        node.absolutePosition(pos); // 見た目の位置を維持
-        node.setAttr('parentId', null);
-        updateNodeVisuals(node, false); // 選択されていない状態のスタイルに戻す
-    });
-
-    // c) 子ノードの処理が終わったら、グループノード自身を破棄
-    groupToDelete.destroy();
-    selectedShape = null;
-    layer.draw();
-    recordHistory('Group deleted (children preserved)'); // 履歴のメッセージも明確に
-    return; // ★ 処理完了
     }
-  }
 
-    if (selectedShape.name() === 'node-group') {
-      
-      // ★ `selectedShape`に接続されたリンクグループを、配列のコピーに対して処理
-      const linksToDelete = [...selectedShape.getAttr('links')] as Konva.Group[];
+    // --- 優先度2: 単一オブジェクトの削除 ---
+    if (selectedShape) {
 
-      linksToDelete.forEach(linkGroup => {
-        deleteLink(linkGroup);
+    if (selectedShape.getAttr('isTemplateItem')) {
+      return; 
+    }
+
+    // --- グループノードが選択されている場合 ---
+    if (selectedShape.name() === 'background-shape') {
+      const groupToDelete = selectedShape;
+
+      // もし、これがテンプレートのルートグループなら、中身ごと完全に削除
+      if (groupToDelete.getAttr('isTemplateRoot')) {
+          const groupId = groupToDelete.id();
+
+          // 1. 「データ」を元に、削除すべき子ノードをレイヤー全体から索敵する
+          const nodesToDelete = layer.find<Konva.Group>('.node-group').filter(
+              node => node.getAttr('parentId') === groupId
+          );
+          
+          // 2. それらの子ノードに接続されている「すべて」のリンクを収集
+          const linksToDestroy = new Set<Konva.Group>();
+          nodesToDelete.forEach(node => {
+              const links = node.getAttr('links') as Konva.Group[] | undefined;
+              if (links) {
+                  // ★ 配列をコピーしてからループするのが、より安全
+                  [...links].forEach(link => linksToDestroy.add(link));
+              }
+          });
+
+          // 3. リンクを、関連付けごと完全に破壊する
+          linksToDestroy.forEach(link => {
+              deleteLink(link); // ★ あなたが以前に完成させた、完璧なリンク削除関数を再利用
+          });
+
+          // 4. 子ノード自身を、一つずつ破壊する
+          nodesToDelete.forEach(node => {
+              node.destroy();
+          });
+          
+          // 5. すべての子孫が消え去った後、グループ自身を破棄する
+          groupToDelete.destroy();
+          
+          selectedShape = null;
+          layer.draw();
+          recordHistory('Template group deleted');
+          renderIpOutline(); // ★ アウトラインも更新する
+          return;
+      } 
+      else {
+      // a) このグループに所属するすべての子ノードを取得
+      //    Konvaの親子関係で直接 'find' するのが最も確実
+      const children = groupToDelete.find<Konva.Group>('.node-group');
+
+      // b) 各子ノードのペアリングを解除
+      //    配列をコピー([...children])してからループするのが安全
+      [...children].forEach(node => {
+          const pos = node.absolutePosition();
+          node.moveTo(layer); // ルートレイヤーに移動
+          node.absolutePosition(pos); // 見た目の位置を維持
+          node.setAttr('parentId', null);
+          updateNodeVisuals(node, false); // 選択されていない状態のスタイルに戻す
       });
-    } 
 
-    else if (selectedShape.name() === 'link-group') {
-      deleteLink(selectedShape);
-      selectedShape = null; // 削除したので選択を解除
+      // c) 子ノードの処理が終わったら、グループノード自身を破棄
+      groupToDelete.destroy();
+      selectedShape = null;
       layer.draw();
-      recordHistory('Link deleted');
-      return; // リンク削除後の処理はここで終了
+      recordHistory('Group deleted (children preserved)'); // 履歴のメッセージも明確に
+      return; // ★ 処理完了
+      }
     }
 
-    selectedShape.destroy();
-    selectedShape = null;
-    layer.draw();
-    recordHistory('Node deleted');
+      if (selectedShape.name() === 'node-group') {
+        
+        // ★ `selectedShape`に接続されたリンクグループを、配列のコピーに対して処理
+        const linksToDelete = [...selectedShape.getAttr('links')] as Konva.Group[];
+
+        linksToDelete.forEach(linkGroup => {
+          deleteLink(linkGroup);
+        });
+      } 
+
+      else if (selectedShape.name() === 'link-group') {
+        deleteLink(selectedShape);
+        selectedShape = null; // 削除したので選択を解除
+        layer.draw();
+        recordHistory('Link deleted');
+        return; // リンク削除後の処理はここで終了
+      }
+
+      selectedShape.destroy();
+      selectedShape = null;
+      layer.draw();
+      recordHistory('Node deleted');
+    }
   }
 });
 
@@ -1643,7 +1701,7 @@ function exportAsHtml() {
   // リンクとグループの矩形も範囲計算に含める
   const allShapes = [...allNodes, ...stage.find('.background-shape'), ...stage.find('.link-group')];
   if (allShapes.length === 0) {
-    alert('書き出すコンテンツがありません。');
+    window.electronAPI.showInfoDialog('書き出すコンテンツがありません。');
     // 何も書き出さない場合は、選択状態を元に戻す
     if (selectedShape) {
         const rect = selectedShape.findOne<Konva.Rect>('.background');
@@ -1693,7 +1751,7 @@ function exportAsHtml() {
         pixelRatio: 2,
         callback: (url) => {
             if (!url) {
-                alert('画像の書き出しに失敗しました。');
+                window.electronAPI.showInfoDialog('画像の書き出しに失敗しました。');
                 return;
             }
 
@@ -1716,7 +1774,7 @@ function exportAsImageAndSendToMain(format: 'png' | 'jpeg' | 'pdf') {
     // 2.書き出し範囲を全要素を囲む矩形として計算
     const allShapes = [...stage.find('.node-group'), ...stage.find('.background-shape')];
     if (allShapes.length === 0) {
-        alert('書き出すコンテンツがありません。');
+        window.electronAPI.showInfoDialog('書き出すコンテンツがありません。');
         return;
     }
 
@@ -1745,7 +1803,7 @@ function exportAsImageAndSendToMain(format: 'png' | 'jpeg' | 'pdf') {
         mimeType: `image/${format}`,
         callback: (url) => {
             if (!url) {
-                alert('画像の書き出しに失敗しました。');
+                window.electronAPI.showInfoDialog('画像の書き出しに失敗しました。');
                 return;
             }
             // 3. メモリ上に、合成用の新しい<canvas>を作成
@@ -2673,6 +2731,105 @@ document.getElementById('ip-zoom-reset-btn')?.addEventListener('click', () => {
   updateHtmlElementsScale(1); 
 });
 
+document.getElementById('ip-ai-cot-btn')?.addEventListener('click', triggerChainOfThought);
+
+async function triggerChainOfThought() {  
+    const selectedNode = (selectedShape?.name() === 'node-group') 
+        ? selectedShape : null;
+    if (!selectedNode) {
+        return;
+    }
+
+    // 1. APIキーを取得
+    const apiKey = await window.electronAPI.getStoreValue('geminiApiKey', '');
+    if (!apiKey) {
+        window.electronAPI.showInfoDialog('APIキーが設定されていません。F2キーの「高度な設定」から設定してください。');
+        return;
+    }
+
+    // 2. プロンプトを作成
+    const charLimit = await window.electronAPI.getStoreValue('cotCharLimit', 30);
+    const nodeTitle = selectedNode.findOne<Konva.Text>('.text')?.text() || '';
+    const prompt = `「${nodeTitle}」というアイデアに続く、創造的で、**1つあたり${charLimit}文字以内**のアイデアを3つ、改行で区切って生成してください。余計な前置きや説明は不要です。`;
+
+    try {
+      aiButton.disabled = true;
+        const selectedApi = await window.electronAPI.getStoreValue('selectedApi', 'gemini');
+        let result;
+
+        if (selectedApi === 'gemini') {
+            // ★ Geminiに送る履歴は、CoTでは常に空でOK
+            const historyForGemini: ChatMessage[] = [];
+            result = await window.electronAPI.requestGeminiResponse(apiKey, historyForGemini, prompt);
+        
+        } else { // 'lm-studio' の場合
+            // ★ historyForLmStudioに、正しい「パスポート」を与える
+            const historyForLmStudio: ChatMessage[] = [
+                { role: 'user', content: prompt }
+            ];
+            result = await window.electronAPI.requestLmStudioResponse(historyForLmStudio);
+        }
+        if (result.success && result.text) {
+            // 5. 結果を解析し、アニメーション付きで新しいノードを生成
+            const ideas = result.text.split('\n').filter(idea => idea.trim() !== '');
+            const newNodes: Konva.Group[] = []; 
+            ideas.forEach((idea, i) => {
+                const startPos = selectedNode.position();
+                const angle = (i / ideas.length) * Math.PI * 2; // 円形に配置
+                const endPos = { 
+                    x: startPos.x + 200 * Math.cos(angle),
+                    y: startPos.y + 200 * Math.sin(angle)
+                };
+
+                // 最初は透明で小さいノードを作成
+                const newNode = buildNode({
+                    id: `node_${Date.now()}${Math.random()}`, // 既存のノード生成と同じ方法でユニークIDを生成
+                    x: startPos.x,
+                    y: startPos.y,
+                    text: idea,
+                    width: 150, // AIが生成する短いテキストに合わせた、適切な初期幅
+                });
+                newNodes.push(newNode);
+                newNode.scale({ x: 0.1, y: 0.1 });
+                newNode.opacity(0);
+
+                // KonvaのTweenで、あなたのアイデア通りのアニメーションを実装
+                const tween = new Konva.Tween({
+                    node: newNode,
+                    duration: 0.5 + i * 0.1, // 少しずつずらす
+                    x: endPos.x,
+                    y: endPos.y,
+                    scaleX: 1,
+                    scaleY: 1,
+                    opacity: 1,
+                    easing: Konva.Easings.EaseOut,
+                    onFinish: () => {
+                        if (i === ideas.length - 1) { // 最後のノードのアニメーションか？
+                            // 3. すべてのリンクを、一度に作成する
+                            newNodes.forEach(node => {
+                                createSingleLink(selectedNode, node, LinkType.ARROW, '');
+                            });
+                            
+                            // 4. そして、この「原子操作」の最終結果を、履歴に記録する
+                            recordHistory('Chain of Thought executed');
+                            layer.draw();
+                        }
+                    }
+                });
+                tween.play();
+            });
+        } else {
+            throw new Error(result.error || 'Unknown AI error');
+        }
+    } catch (error) {
+        window.electronAPI.showInfoDialog(`AIとの通信に失敗しました: ${error}`);
+    } finally {
+        aiButton.disabled = false;
+        // 6. カーソルを元に戻す
+        stage.container().style.cursor = 'default';
+    }
+}
+
 const toggleOnTopBtn = document.getElementById('ip-toggle-on-top-btn');
 if (toggleOnTopBtn) {
   // --- a) ボタンのクリックイベント ---
@@ -2909,7 +3066,7 @@ let lastRectPos: { x: number; y: number };
 
 // 4. イベントハンドラ
 stage.on('mousedown', (e) => {
-  if (isContentEditing) return;
+  if (isContentEditing || isAiThinking) return;
   // 条件: 左クリック(0) かつ 背景がクリックされた場合
   if (e.evt.button === 0 && (e.target === stage || e.target.name() === 'background')) {
     // 既存の選択を解除
@@ -2924,7 +3081,7 @@ stage.on('mousedown', (e) => {
 });
 
 stage.on('mousemove', (e) => {
-  if (isContentEditing) return;
+  if (isContentEditing || isAiThinking) return;
   if (!selectionStartPos) return;
   e.evt.preventDefault();
 
@@ -3054,6 +3211,7 @@ selectionRect.on('dragend', () => {
 });
 
 stage.on('mousedown', (e) => {
+  if (isAiThinking) return;
     if (e.evt.button === 2 && isContentEditing ) {
       e.evt.preventDefault();
       e.evt.stopPropagation();
@@ -3077,7 +3235,7 @@ stage.on('mousedown', (e) => {
 });
 
 stage.on('mousemove', (_e) => {
-  if (isContentEditing) return;
+  if (isContentEditing || isAiThinking) return;
   if (!isPanning) return;
   
   didPan = true; // mousemoveが一度でも呼ばれたら、ドラッグと見なす
@@ -3415,6 +3573,17 @@ window.addEventListener('keydown', (e) => {
         redo();
       }
 
+      // --- Chain of Thought: Ctrl + Shift + T ---
+      if (isCtrlOrCmd && isShift && e.key.toLowerCase() === 't') {
+        // テキスト編集中や、AIが既に思考中の場合は、何もしない
+        const aiButton = document.getElementById('ip-ai-cot-btn') as HTMLButtonElement;
+        if (isTextEditing || (aiButton && aiButton.disabled)) {
+          return;
+        }
+        e.preventDefault();
+        triggerChainOfThought();
+      }
+
       // --- Ctrl + Shift + R を止める ---
       if (isCtrlOrCmd && e.key.toLowerCase() === 'r' && isShift) {
         e.preventDefault(); 
@@ -3490,7 +3659,7 @@ window.addEventListener('keydown', (e) => {
   }
 
   // ダークモード
-  if (isCtrlOrCmd && e.code === 'KeyT') {
+  if (isCtrlOrCmd && e.code === 'KeyT' && !isShift) {
     e.preventDefault();
     window.electronAPI.toggleDarkMode(); 
   }

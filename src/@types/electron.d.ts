@@ -32,6 +32,11 @@ interface ExportOptions {
   format: 'epub' | 'html'| 'pdf'; 
 }
 
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
 export interface IElectronAPI {
   // ファイル操作
   openFile: () => Promise<{ 
@@ -240,6 +245,15 @@ saveIdeaProcessorFile: (filePath: string | null, saveData: any) => Promise<any>;
   confirmSaveDialog: (windowName: string) => Promise<'save' | 'discard' | 'cancel'>;
   toggleIpAlwaysOnTop: () => Promise<boolean>;
   togglePreviewAlwaysOnTop: () => Promise<boolean>;
+  requestGeminiResponse: (
+      apiKey: string, 
+      history: { role: string, content: string }[], 
+      newMessage: string
+  ) => Promise<{ success: boolean; text?: string; error?: string; }>;  
+  requestLmStudioResponse: (
+      history: ChatMessage[]
+  ) => Promise<{ success: boolean; text?: string; error?: string; }>;  
+  showInfoDialog: (message: string) => void;
 }
 
 // グローバルなwindowオブジェクトにelectronAPIが存在することを宣言

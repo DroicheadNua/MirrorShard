@@ -1,24 +1,24 @@
-MirrorShard ver. 1.3.0  
+MirrorShard ver. 1.4.0  
 
-日本語での小説執筆に特化した、クロスプラットフォームのテキストエディタです。  
+アイデアプロセッサとAI連携機能を搭載した、小説執筆用エディタです。  
 没入感を重視したミニマルなデザインに仕上げました。  
 
 ![MirrorShard Key Visual](screenshots/ScreenShot01.png)
 
-■ ダウンロード
+■ ダウンロード  
 
 [![Windows](https://img.shields.io/badge/Download-Windows-blue)]  
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.3.0/MirrorShard.Setup.1.3.0.exe)  
-[![Mac (Apple Silicon)](https://img.shields.io/badge/Download-Mac_(Apple_Silicon)-green)]  
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.3.0/MirrorShard-1.3.0-arm64.dmg)  
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard.Setup.1.4.0.exe)
+[![Mac (Apple Silicon)]  (https://img.shields.io/badge/Download-Mac_(Apple_Silicon)-green)]  
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard-1.4.0-arm64.dmg)
 [![Linux](https://img.shields.io/badge/Download-Linux-lightgrey)]  
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.3.0/MirrorShard-1.3.0-x86_64.AppImage)  
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard-1.4.0-x86_64.AppImage)
 
 または、[最新のリリース一覧ページ](https://github.com/DroicheadNua/MirrorShard/releases/latest)からダウンロードできます。  
 
 ■注意事項  
 　インストールやご使用などにつきまして、何か疑問の点等ございましたら「FAQ.md」を御覧ください。  
-　それでも解決しない問題がございましたら、MirrorShard開発アカウント  
+　それでも解決しない問題がございましたら、MirrorShard開発アカウント
 mirrorshard.dev@gmail.com
 までご一報いただければ幸いです。  
 
@@ -26,6 +26,7 @@ mirrorshard.dev@gmail.com
 ・縦書きと青空文庫形式のルビに対応し、リアルタイムで更新されるプレビューウィンドウ  
 ・アイデアプロセッサを搭載。発想支援と執筆をシームレスに連携  
 ![MirrorShard Idea Processor](screenshots/ScreenShot05.png)
+・AI連携による発想支援  
 ・数十万行に及ぶ巨大サイズのテキストにも対応  
 ・マークダウン記法によるアウトライン機能を搭載。またタブとアウトラインパネルが一体化した構造により、複数のテキストファイルをシームレスに運用可能  
 ・フレームレスウィンドウを採用したミニマルなデザインに加え、UIを非表示にできるZENモードを搭載  
@@ -39,7 +40,7 @@ mirrorshard.dev@gmail.com
 本ソフトウェアは、操作のほぼすべてをキーボードショートカットで行うことができます。  
 ZENモード（UI非表示）状態でもショートカットは有効ですので、没入感を求める方はZENモードの使用がおすすめです。  
 
-◯ファイル操作	  
+◯ファイル操作  
 新規ファイル	Ctrl + N（Cmd + N）　新しいタブを作成します。  
 ファイルを開く	Ctrl + O（Cmd + O）　ファイル選択ダイアログを開きます。  
 ファイルを保存	Ctrl + S（Cmd + S）　上書き保存します。  
@@ -47,12 +48,12 @@ ZENモード（UI非表示）状態でもショートカットは有効ですの
 素材フォルダを開く　Ctrl + Shift + J（Cmd + Shift + J）　素材フォルダを開きます。中身を入れ替えることでカスタマイズが可能です。  
 
 ◯表示  
-縦書きプレビュー	Ctrl + P（Cmd + P）　プレビューウィンドウを開閉します。   
+縦書きプレビュー	Ctrl + P（Cmd + P）　プレビューウィンドウを開閉します。  
 アイデアプロセッサ　Ctrl + I（Cmd + I）　アイデアプロセッサウィンドウを開きます（詳細は後述）。  
 ダークモード切替	Ctrl + T（Cmd + T）　通常モードとダークモードを切り替えます。  
 スポットライトモード切替	Ctrl + L（Cmd + L）　編集中の項目以外をぼかして表示します。  
 Zenモード切替	Ctrl + Shift + C（Cmd + Shift + C）　UIの表示/非表示を切り替えます。  
-半透明ウィンドウ切替	Ctrl + Shift + W（Cmd + Shift + W）　背景画像が目立つようにテキスト領域を右に寄せ、半透明にします。
+半透明ウィンドウ切替	Ctrl + Shift + W（Cmd + Shift + W）　背景画像が目立つようにテキスト領域を右に寄せ、半透明にします。  
 ![MirrorShard Cat](screenshots/ScreenShot03.png)
 アウトライン表示切替	Ctrl + Shift + O（Cmd + Shift + O）　アウトラインパネルの表示・非表示を切り替えます。ZENモード中にアウトライン機能を使いたい場合などに。  
 テキストエリア右寄せ/解除		Ctrl + Shift + O（Cmd + Shift + O）　テキスト表示エリアを右に寄せます。プレビューウィンドウやアイデアプロセッサウィンドウを見ながら執筆したい場合などに便利です。もう一度押すと解除されます。  
@@ -144,7 +145,7 @@ by word (チェックボックス): チェックを入れると、単語単位�
 
 ・フォント  
 「fonts」フォルダにお好きなフォントファイル（ttf・otf・ttc）を入れてください。  
-　はじめから入っているフォントは不要でしたら削除して構いませんが、PlemolJPHS-Regular.ttfはステータスバーの表示に用いられています。fontsフォルダにこのフォントが存在しない場合、お使いのPCにある別のフォントが用いられます。  
+　はじめから入っているフォントは不要でしたら削除して構いません。  
 
 ■高度な設定（Advanced Settings）  
 　より高度なカスタマイズを行います。  
@@ -152,7 +153,7 @@ by word (チェックボックス): チェックを入れると、単語単位�
 ◯システムフォントの読み込み  
 ・PCにインストールされているシステムフォントをスキャンし、プルダウンメニューで選択することができます。  
 　※ただし、正常に読み取れないフォントや、インストールされているのに読み取れないフォント（MacOSにバンドルされているフォントの一部など）があります。ご了承ください。  
-・スキャン結果はキャッシュされますので、、一度スキャンしてしまえば2回目以降の表示は高速です。
+・スキャン結果はキャッシュされますので、、一度スキャンしてしまえば2回目以降の表示は高速です。  
 　ただしスキャン後に追加されたフォントは読み込めませんので、その際は再びスキャンを行ってください。  
 ・適用したシステムフォントは、次回起動時にも維持されます。  
 ・使い方  
@@ -184,9 +185,9 @@ by word (チェックボックス): チェックを入れると、単語単位�
 　・青空文庫形式のルビに対応。エディタ側で所定の形式（｜親字《ルビ》）で書けば、プレビュー側でルビとして反映されます。  
 　・終了時のウィンドウサイズと位置は保存され、次回起動時に反映されます。  
 
-◯操作
+◯操作  
 　右上のボタンでウィンドウ操作などができます。  
-　・プレビューを閉じる(Ctrl+P): プレビューウィンドウを閉じます。
+　・プレビューを閉じる(Ctrl+P): プレビューウィンドウを閉じます。  
 　・最大化／解除: ウィンドウを最大化／解除します。  
 　・降雪エフェクト(Ctrl+Shitf+E): プレビュー画面に雪を降らせます。もう一度押すと解除されます。  
 
@@ -199,6 +200,8 @@ by word (チェックボックス): チェックを入れると、単語単位�
 　詳細は「アイデアプロセッサ機能使用ガイド」をご確認ください。  
 　また、このアイデアプロセッサ機能で作成したユーザーマニュアルがございますので、よろしければご利用ください。  
 ![MirrorShard Idea Processor Manual](screenshots/ScreenShot04.png)
+
+　なお、AI機能による発想支援（Chain of Thought）を使用するには、Google GeminiのAPIキー、またはLM StudioとローカルAIのセットアップが必要になります。詳細は「アイデアプロセッサ機能使用ガイド」をご確認ください。  
 
 ■エクスポート  
 　電子書籍（EPUB形式）やPDF、HTMLへのエクスポートを行います。  
@@ -216,7 +219,7 @@ by word (チェックボックス): チェックを入れると、単語単位�
 　Springin'様 https://www.springin.org  
 
 ・フォント  
-　・PlemolJP (たわら様　https://github.com/yuru7/PlemolJP　SIL OPEN FONT LICENSE Version 1.1)  
+　・PlemolJP (たわら様　  https://github.com/yuru7/PlemolJP　SIL OPEN FONT LICENSE Version 1.1)  
 　・Noto Serif Japanese（Google Fonts, SIL Open Font License, Version 1.1）  
 　・Klee One（Fontworks Inc.様　SIL OPEN FONT LICENSE Version 1.1 ）  
 
@@ -224,7 +227,7 @@ by word (チェックボックス): チェックを入れると、単語単位�
 　Imagen 4 による生成  
 
 ・BGM  
-　すべてPixabay https://pixabay.com より  
+　すべてPixabay https://pixabay.com より
 　・ambient piano "Candrika" -Moonlight-（leela_takaki様）  
 　・LoFi Piano "Calm night"（Akiko_Shina様）  
 　・432 Hz Starlit Serenity（GnosticBliss様）  
@@ -246,5 +249,5 @@ by word (チェックボックス): チェックを入れると、単語単位�
 　なお、本ソフトウェアのコードの大半はGemini 2.5 pro君が書いてくれました。ありがとうGemini君。  
 
 　Copyright (c) 2025 [DroicheadNua]  
-　mirrorshard.dev@gmail.com
-　https://github.com/DroicheadNua/MirrorShard
+　mirrorshard.dev@gmail.com  
+　https://github.com/DroicheadNua/MirrorShard  

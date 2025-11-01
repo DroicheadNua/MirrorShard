@@ -11,7 +11,6 @@ import { ExportOptions } from '../@types/electron';
 import util from 'util';
 
 
-
 // --- [エリア 1: 型定義 & グローバル変数] ---
 interface StoreType {
   fontsize: number;
@@ -38,6 +37,7 @@ interface StoreType {
   ideaProcessorIsMaximized?: boolean;
   isIpAlwaysOnTop?: boolean; 
   isPreviewAlwaysOnTop?: boolean;
+  aiResponseMaxLength?: number;
 }
 
 const store = new Store<StoreType>({ 
@@ -63,6 +63,7 @@ const store = new Store<StoreType>({
     ideaProcessorIsMaximized: false,
     isIpAlwaysOnTop: true, 
     isPreviewAlwaysOnTop: true,    
+    aiResponseMaxLength: 2000,
   }
 });
 
@@ -97,6 +98,19 @@ interface CanvasGroup {
   height: number;
   label: string;
   isTemplateRoot?: boolean;
+}
+
+interface LmStudioResponse {
+  choices: {
+    message: {
+      content: string;
+    };
+  }[];
+}
+
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
 }
 
 const userDataPath = app.getPath('userData');
@@ -776,9 +790,9 @@ function toggleSettingsWindow() {
     settingsWindow = new BrowserWindow({
       // ★ 親の高さに合わせ、幅は少し狭くする
       minWidth:540,
-      minHeight:680,
+      minHeight:720,
       width: 540,
-      height: 680, 
+      height: 720, 
       title: 'Settings',
       parent: mainWindow, // 親を指定
       modal: false,
@@ -2775,6 +2789,89 @@ ipcMain.on('request-toggle-fullscreen', (event) => {
       senderWindow.setFullScreen(!isCurrentlyFullscreen);
   }
 });
+
+ipcMain.handle('request-gemini-response', async (_event, apiKey: string, history: any[], newMessage: string) => {
+    try {
+      const { GoogleGenerativeAI } = require("@google/generative-ai"); 
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" }); 
+
+        const chat = model.startChat({
+            history: history.map(msg => ({
+                role: msg.role === 'assistant' ? 'model' : 'user',
+                //partsは配列である必要があるので、この形がより安全
+                parts: [{ text: msg.content }] 
+            }))
+        });
+        
+        // sendMessageに渡すのは、文字列だけでOK
+        const result = await chat.sendMessage(newMessage);
+        const response = result.response;
+        const text = response.text();
+        const maxLength = store.get('aiResponseMaxLength', 2000);
+        const truncatedText = text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+        return { success: true, text: truncatedText };
+        
+    } catch (error) {
+        let errorMessage = "An unknown error occurred.";
+        if (error instanceof Error) {
+            errorMessage = error.message;
+        }
+        console.error("Gemini API Error:", errorMessage);
+        return { success: false, error: errorMessage };
+    }
+});
+
+ipcMain.handle('request-lm-studio-response', async (_event, history: ChatMessage[]) => {
+  try {
+    const fetch = require('node-fetch');
+    // 1. ストアから、「1アイデアあたりの目標文字数」を読み込む
+    const charLimitPerIdea = store.get('cotCharLimit', 30);    
+    // 2. 3つのアイデアの「合計の目標文字数」を計算する
+    const totalCharLimit = charLimitPerIdea * 3;    
+    // 3. 合計文字数を、AIが理解できる「合計トークン数」に換算する
+    const maxTokens = Math.ceil(totalCharLimit * 1.5);
+    const response = await fetch('http://127.0.0.1:1234/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: history,
+        temperature: 0.7,
+        stream: false,
+        max_tokens: maxTokens
+      })
+    });
+    if (!response.ok) throw new Error(`[${response.status}] ${response.statusText}`);
+    
+    // ★ as LmStudioResponse で、TypeScriptに「データの形」を教える
+    const data = await response.json() as LmStudioResponse;
+    
+    // ★ オプショナルチェイニングで、安全にデータにアクセスする
+    const content = data?.choices?.[0]?.message?.content;
+
+    if (typeof content === 'string') {
+        const maxLength = store.get('aiResponseMaxLength', 2000);
+        const truncatedText = content.length > maxLength ? content.substring(0, maxLength) + '...' : content;
+        return { success: true, text: truncatedText };
+    } else {
+        throw new Error('Unexpected response structure from LM Studio.');
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+  // ★ infoレベルの、シンプルなメッセージボックスを表示するためのハンドラ
+  ipcMain.on('show-info-dialog', (event, message: string) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      dialog.showMessageBox(win, {
+        type: 'info',
+        title: 'Information',
+        message: message,
+      });
+    }
+  });
 
 }
 

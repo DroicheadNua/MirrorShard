@@ -10,10 +10,10 @@
     <button id="close-settings-btn" title="Close (Esc)">×</button>
   </div>
   
-  <h1>Advanced Settings</h1>
+  <h2>Advanced Settings</h2>
   
   <section id="font-settings">
-    <h2>System Fonts</h2>
+    <h3>System Fonts</h3>
     <p>PCにインストールされているフォントをエディタに適用します。</p>
     <button id="scan-fonts-btn">Scan System Fonts</button>
     <select id="system-font-selector" disabled></select>
@@ -26,7 +26,7 @@
     
     <!-- --- Custom Resources --- -->
     <section id="custom-resources">
-      <h2>Custom Resources</h2>
+      <h3>Custom Resources</h3>
       <p class="description">お好きな背景画像やBGMを、サイクル機能とは別に指定します。</p>
       
       <div class="form-group">
@@ -51,7 +51,7 @@
     <hr>
 
 <section id="external-tools-settings">
-  <h2>External Tools</h2>
+  <h3>External Tools</h3>
   
   <div class="form-group">
     <label for="pandoc-path-input">Pandoc Path:</label>
@@ -63,6 +63,31 @@
       EpubやPDFへのエクスポートに必要です。
       <a href="#" id="pandoc-link">インストールはこちら</a>
     </p>
+  </div>
+</section>
+
+    <hr>
+
+<section id="ai-keys">
+  <h3>AI Keys</h3>
+  <div class="setting-item">
+    <span>API Provider:</span>
+    <label><input type="radio" name="api-provider" value="gemini" checked> Gemini</label>
+    <label><input type="radio" name="api-provider" value="lm-studio"> LM Studio</label>
+  </div>
+  <div class="setting-item">
+    <label for="cot-char-limit-input">CoT Character Limit:</label>
+    <input type="number" id="cot-char-limit-input" value="30" min="10" max="100">
+    <span>(10〜100文字,デフォルトは30)</span>
+  </div>
+  <div class="setting-item">
+    <label for="ai-max-length-input">AI Response Max Length:</label>
+    <input type="number" id="ai-max-length-input" value="2000" min="100" max="10000">
+    <span>(100〜10000文字)</span>
+  </div>  
+  <div class="setting-item" id="gemini-settings-container">
+    <label for="gemini-api-key-input">Gemini API Key:</label>
+    <input type="password" id="gemini-api-key-input" placeholder="Enter your API key">
   </div>
 </section>
   

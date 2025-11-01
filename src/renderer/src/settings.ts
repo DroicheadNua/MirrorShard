@@ -17,6 +17,10 @@ const clearBgBtn = document.getElementById('clear-bg-btn')!;
 const selectBgmBtn = document.getElementById('select-bgm-btn')!;
 const bgmPathInput = document.getElementById('bgm-path-input') as HTMLInputElement;
 const clearBgmBtn = document.getElementById('clear-bgm-btn')!;
+const geminiRadio = document.querySelector('input[name="api-provider"][value="gemini"]') as HTMLInputElement;
+const lmStudioRadio = document.querySelector('input[name="api-provider"][value="lm-studio"]') as HTMLInputElement;
+const geminiSettingsContainer = document.getElementById('gemini-settings-container');
+const cotCharLimitInput = document.getElementById('cot-char-limit-input') as HTMLInputElement;
 
 /** フォントリストを読み込み、UIを構築する */
 const loadFontList = async (force: boolean) => {
@@ -192,10 +196,56 @@ clearBgmBtn.addEventListener('click', () => {
   window.interop.sendToMain('revert-to-cycle-bgm');
 });
 
-
-
 closeBtn.addEventListener('click', () => {
   window.electronAPI.closeSettingsWindow();
+});
+
+const geminiApiKeyInput = document.getElementById('gemini-api-key-input') as HTMLInputElement;
+
+// 起動時に、保存された値を読み込んで表示
+window.electronAPI.getStoreValue('geminiApiKey', '').then(apiKey => {
+  if (geminiApiKeyInput) geminiApiKeyInput.value = apiKey;
+});
+
+// 値が変更されたら、即座に保存
+geminiApiKeyInput?.addEventListener('change', () => {
+  window.electronAPI.setStoreValue('geminiApiKey', geminiApiKeyInput.value);
+});
+
+// --- 1. 状態を復元する ---
+window.electronAPI.getStoreValue('selectedApi', 'gemini').then(api => {
+  if(!geminiSettingsContainer)return;
+  if (api === 'lm-studio') {
+    lmStudioRadio.checked = true;
+    geminiSettingsContainer.style.display = 'none';
+  } else {
+    geminiRadio.checked = true;
+    geminiSettingsContainer.style.display = 'block';
+  }
+});
+
+// --- 2. 変更を監視し、保存する ---
+[geminiRadio, lmStudioRadio].forEach(radio => {
+  if(!geminiSettingsContainer)return;
+  radio.addEventListener('change', () => {
+    const selectedApi = radio.value;
+    window.electronAPI.setStoreValue('selectedApi', selectedApi);
+    // Geminiが選ばれた時だけ、APIキー入力欄を表示
+    geminiSettingsContainer.style.display = selectedApi === 'gemini' ? 'block' : 'none';
+  });
+});
+
+// --- 1. 起動時に、保存された値を読み込む ---
+window.electronAPI.getStoreValue('cotCharLimit', 30).then(limit => {
+  if (cotCharLimitInput) cotCharLimitInput.valueAsNumber = limit;
+});
+
+// --- 2. 値が変更されたら、即座に保存する ---
+cotCharLimitInput?.addEventListener('change', () => {
+  // 不正な値が入らないようにバリデーション
+  const limit = Math.max(10, Math.min(100, parseInt(cotCharLimitInput.value, 10)));
+  cotCharLimitInput.value = String(limit); // 補正した値をUIに反映
+  window.electronAPI.setStoreValue('cotCharLimit', limit);
 });
 
 });

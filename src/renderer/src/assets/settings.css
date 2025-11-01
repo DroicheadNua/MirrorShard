@@ -5,12 +5,17 @@ html, body {
   background-color: rgb(255, 250, 220); 
   color: #333333;
   font-family:  serif; 
-  font-size: 14px;
+  font-size: 13px;
   -webkit-app-region: drag; 
+  line-height:1.2;
 }
 
-#font-settings, #external-tools-settings, #custom-resources {
+#font-settings, #external-tools-settings, #custom-resources, #ai-keys {
     -webkit-app-region:no-drag;
+    line-height:1.3;
+}
+#ai-keys {
+    line-height:2;
 }
 
 #window-controls {
@@ -27,7 +32,7 @@ html, body {
   border:none;
   background-color: transparent;
   border-radius: 50%; 
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
 }
 
