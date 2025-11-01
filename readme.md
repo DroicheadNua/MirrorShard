@@ -8,11 +8,11 @@ MirrorShard ver. 1.4.0
 ■ ダウンロード  
 
 [![Windows](https://img.shields.io/badge/Download-Windows-blue)]  
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard.Setup.1.4.0.exe)
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard.Setup.1.4.0.exe)  
 [![Mac (Apple Silicon)]  (https://img.shields.io/badge/Download-Mac_(Apple_Silicon)-green)]  
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard-1.4.0-arm64.dmg)
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard-1.4.0-arm64.dmg)  
 [![Linux](https://img.shields.io/badge/Download-Linux-lightgrey)]  
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard-1.4.0-x86_64.AppImage)
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard-1.4.0-x86_64.AppImage)  
 
 または、[最新のリリース一覧ページ](https://github.com/DroicheadNua/MirrorShard/releases/latest)からダウンロードできます。  
 
