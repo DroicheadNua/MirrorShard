@@ -9,7 +9,7 @@ MirrorShard ver. 1.4.0
 
 [![Windows](https://img.shields.io/badge/Download-Windows-blue)]  
 (https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard.Setup.1.4.0.exe)  
-[![Mac (Apple Silicon)]https://img.shields.io/badge/Download-Mac_(Apple_Silicon)-green)]  
+[![Mac (Apple Silicon)](https://img.shields.io/badge/Download-Mac_(Apple_Silicon)-green)]  
 (https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard-1.4.0-arm64.dmg)  
 [![Linux](https://img.shields.io/badge/Download-Linux-lightgrey)]  
 (https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard-1.4.0-x86_64.AppImage)  
