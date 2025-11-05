@@ -242,10 +242,78 @@ window.electronAPI.getStoreValue('cotCharLimit', 30).then(limit => {
 
 // --- 2. 値が変更されたら、即座に保存する ---
 cotCharLimitInput?.addEventListener('change', () => {
-  // 不正な値が入らないようにバリデーション
   const limit = Math.max(10, Math.min(100, parseInt(cotCharLimitInput.value, 10)));
   cotCharLimitInput.value = String(limit); // 補正した値をUIに反映
   window.electronAPI.setStoreValue('cotCharLimit', limit);
+});
+
+// --- User Name ---
+const userNameInput = document.getElementById('ai-user-name-input') as HTMLInputElement;
+window.electronAPI.getStoreValue('aiChatUserName', 'User').then(name => userNameInput.value = name);
+userNameInput.addEventListener('change', () => {
+  window.electronAPI.setStoreValue('aiChatUserName', userNameInput.value);
+  window.electronAPI.updateAiChatSettings();
+});
+
+// --- User Icon ---
+const userIconPathInput = document.getElementById('ai-user-icon-path-input') as HTMLInputElement;
+const userIconSelectBtn = document.getElementById('ai-user-icon-select');
+
+// a) 起動時に、保存されたパスを入力欄に表示
+window.electronAPI.getStoreValue('aiChatUserIconPath', '').then(path => {
+  if (userIconPathInput) userIconPathInput.value = path;
+});
+
+// b) 入力欄が手動で変更されたら、ストアに保存
+userIconPathInput?.addEventListener('change', async () => {
+  const newPath = userIconPathInput.value;
+  // ★ 画像をData URLに変換する新しいAPIをmainに依頼
+  const dataUrl = newPath ? await window.electronAPI.convertPathToDataUrl(newPath) : '';
+  window.electronAPI.setStoreValue('aiChatUserIconPath', newPath);
+  window.electronAPI.setStoreValue('aiChatUserIconDataUrl', dataUrl);
+  window.electronAPI.updateAiChatSettings();
+});
+
+// c) 「選択」ボタンは、入力欄を更新するヘルパー
+userIconSelectBtn?.addEventListener('click', async () => {
+  const result = await window.electronAPI.selectImageFile();
+  if (result) {
+    userIconPathInput.value = result.path;
+    // ★ 手動変更と同じように、changeイベントを発火させて、保存処理を共通化
+    userIconPathInput.dispatchEvent(new Event('change'));
+  }
+});
+
+// --- Assistant Name ---
+const assistantNameInput = document.getElementById('ai-assistant-name-input') as HTMLInputElement;
+window.electronAPI.getStoreValue('aiChatAssistantName', 'Assistant').then(name => assistantNameInput.value = name);
+assistantNameInput.addEventListener('change', async () => {
+  window.electronAPI.setStoreValue('aiChatAssistantName', assistantNameInput.value);
+  window.electronAPI.updateAiChatSettings();
+});
+
+// --- Assistant Icon ---
+const assistantIconPathInput = document.getElementById('ai-assistant-icon-path-input') as HTMLInputElement;
+const assistantIconSelectBtn = document.getElementById('ai-assistant-icon-select');
+
+window.electronAPI.getStoreValue('aiChatAssistantIconPath', '').then(path => {
+  if (assistantIconPathInput) assistantIconPathInput.value = path;
+});
+
+assistantIconPathInput?.addEventListener('change', async () => {
+  const newPath = assistantIconPathInput.value;
+  const dataUrl = newPath ? await window.electronAPI.convertPathToDataUrl(newPath) : '';
+  window.electronAPI.setStoreValue('aiChatAssistantIconPath', newPath);
+  window.electronAPI.setStoreValue('aiChatAssistantIconDataUrl', dataUrl);
+  window.electronAPI.updateAiChatSettings();
+});
+
+assistantIconSelectBtn?.addEventListener('click', async () => {
+  const result = await window.electronAPI.selectImageFile();
+  if (result) {
+    assistantIconPathInput.value = result.path;
+    assistantIconPathInput.dispatchEvent(new Event('change'));
+  }
 });
 
 });

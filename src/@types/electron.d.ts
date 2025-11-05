@@ -254,6 +254,23 @@ saveIdeaProcessorFile: (filePath: string | null, saveData: any) => Promise<any>;
       history: ChatMessage[]
   ) => Promise<{ success: boolean; text?: string; error?: string; }>;  
   showInfoDialog: (message: string) => void;
+  openAiChatWindow: () => void;
+  closeAiChatWindow: () => void;
+  writeToClipboard: (text: string) => void;
+  importGeminiLogAsText: () => Promise<{ title: string; content: string } | null>;
+  convertGeminiLogToText: () => void;  
+  saveAiChatLog: (history: ChatMessage[], format: 'pastel' | 'lm-studio') => void;
+  loadAiChatLog: () => Promise<ChatMessage[] | null>;  
+  loadAiChatLogByPath: (filePath: string) => Promise<ChatMessage[] | null>;
+  onGlobalFontSizeChange: (callback: (action: 'increase' | 'decrease' | 'reset' | 'reset20') => void) => void;
+  sendChatToEditor: (title: string, content: string) => void;
+  selectImageFile: () => Promise<{ path: string; dataUrl: string; } | null>;
+  saveAiChatLogOverwrite: (history: ChatMessage[]) => void;
+  updateAiChatSettings: () => void;   
+  convertPathToDataUrl: (filePath: string) => Promise<string | null>;
+  isChatDirty: () => Promise<boolean>;
+  onRequestChatDirtyState: (callback: () => void) => void;
+  responseChatDirtyState: (isDirty: boolean) => void;  
 }
 
 // グローバルなwindowオブジェクトにelectronAPIが存在することを宣言

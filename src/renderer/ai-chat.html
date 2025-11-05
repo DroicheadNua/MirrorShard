@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>AI Chat</title>
+  <link rel="stylesheet" href="./src/assets/ai-chat.css">
+</head>
+<body>
+  <!-- 1. ドラッグとボタンのための、透明なタイトルバー -->
+  <div id="title-bar">
+    <div class="top-right-buttons">
+      <button id="ai-save-overwrite-btn" title="Save Log">S</button>
+      <button id="ai-save-log-btn" title="Save As">A</button>
+      <button id="ai-load-log-btn" title="Load Log">L</button>
+      <button id="ai-fullscreen-btn" title="Toggle Maximize">⤢</button>
+      <button id="ai-close-btn" title="Close Window">×</button>
+    </div>
+  </div>
+
+  <!-- 2. チャット全体のコンテナ -->
+  <div id="chat-container">
+    <!-- a) チャットログが表示されるエリア -->
+    <div id="chat-log"></div>
+    
+    <!-- b) 入力フォーム -->
+    <form id="chat-form">
+      <textarea id="message-input" rows="2" spellcheck="false" placeholder="Enter a prompt..."></textarea>
+      <button id="send-btn" type="submit">Run</button>
+    </form>
+  </div>
+  
+  <script type="module" src="./src/ai-chat.ts"></script>
+</body>
+</html>

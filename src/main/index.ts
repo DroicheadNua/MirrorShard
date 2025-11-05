@@ -1,5 +1,5 @@
 // src/main/index.ts
-import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, protocol, clipboard } from 'electron'
 import path, { join, basename, extname } from 'path'
 import * as Encoding from 'encoding-japanese';
 import { electronApp, is } from '@electron-toolkit/utils'
@@ -38,6 +38,8 @@ interface StoreType {
   isIpAlwaysOnTop?: boolean; 
   isPreviewAlwaysOnTop?: boolean;
   aiResponseMaxLength?: number;
+  aiChatWindowBounds?: { x: number; y: number; width: number; height: number; };
+  lastAiChatSessionPath?: string | null;  
 }
 
 const store = new Store<StoreType>({ 
@@ -64,6 +66,8 @@ const store = new Store<StoreType>({
     isIpAlwaysOnTop: true, 
     isPreviewAlwaysOnTop: true,    
     aiResponseMaxLength: 2000,
+    aiChatWindowBounds: undefined,
+    lastAiChatSessionPath: null,    
   }
 });
 
@@ -125,6 +129,7 @@ let previewWindow: BrowserWindow | null = null;
 let shortcutWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let ideaProcessorWindow: BrowserWindow | null = null;
+let aiChatWindow: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 let fileToOpenOnStartup: string | null = null;
@@ -192,6 +197,23 @@ function ensureUserResources(): void {
       console.log(`[ensure] Copying initial resources: "${sourceResourcesPath}" -> "${destResourcesPath}"`);
       cpSync(sourceResourcesPath, destResourcesPath, { recursive: true });
     }
+    // もし、トップレベルは存在しても…
+    else {
+      // a) これから追加したいサブフォルダのリストを定義
+      const subfoldersToCheck = ['default_icons']; // 将来、'themes'などを追加できる
+
+      subfoldersToCheck.forEach(folder => {
+        const sourceSubfolder = join(sourceResourcesPath, folder);
+        const destSubfolder = join(destResourcesPath, folder);
+
+        // b) もし、そのサブフォルダが、コピー先に存在しなかったら…
+        if (existsSync(sourceSubfolder) && !existsSync(destSubfolder)) {
+          // c) そのサブフォルダだけを、追加でコピーする (アップデート)
+          console.log(`[ensure] Updating subfolder: "${folder}"`);
+          cpSync(sourceSubfolder, destSubfolder, { recursive: true });
+        }
+      });
+    }    
   } catch (e) {
     console.error('FATAL: Failed to ensure user resources:', e);
     dialog.showErrorBox('リソースファイルのコピーに失敗しました', `エラー:`);
@@ -372,6 +394,13 @@ function buildMenu(): void {
           }
         },                         
         {
+          label: 'AI Chat', 
+          accelerator: 'CmdOrCtrl+Shift+A',
+          click: () => {
+            createAiChatWindow(); 
+          }
+        },            
+        {
           label: 'Open File...',
           accelerator: 'CmdOrCtrl+O',
           click: () => {
@@ -455,29 +484,68 @@ submenu: [
     label: '文字を大きく',
     accelerator: 'CmdOrCtrl+=',
     click: () => {
-      // 現在フォーカスされているウィンドウに命令を送る
-      BrowserWindow.getFocusedWindow()?.webContents.send('change-font-size', 'increase');
+        const windowsToUpdate = [
+        mainWindow, 
+        previewWindow, 
+        ideaProcessorWindow, 
+        aiChatWindow
+      ];
+      windowsToUpdate.forEach(win => {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('change-font-size', 'increase');
+        }
+      });  
     }
   },
   {
     label: '文字を小さく',
     accelerator: 'CmdOrCtrl+-',
     click: () => {
-      BrowserWindow.getFocusedWindow()?.webContents.send('change-font-size', 'decrease');
+        const windowsToUpdate = [
+        mainWindow, 
+        previewWindow, 
+        ideaProcessorWindow, 
+        aiChatWindow
+      ];
+      windowsToUpdate.forEach(win => {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('change-font-size', 'decrease');
+        }
+      });  
     }
   },
   {
     label: '文字サイズをリセット',
     accelerator: 'CmdOrCtrl+0',
     click: () => {
-      BrowserWindow.getFocusedWindow()?.webContents.send('change-font-size', 'reset');
+        const windowsToUpdate = [
+        mainWindow, 
+        previewWindow, 
+        ideaProcessorWindow, 
+        aiChatWindow
+      ];
+      windowsToUpdate.forEach(win => {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('change-font-size', 'reset');
+        }
+      });  
     }
   },
   {
     label: '文字サイズを20に',
     accelerator: 'CmdOrCtrl+9',
     click: () => {
-      BrowserWindow.getFocusedWindow()?.webContents.send('change-font-size', 'reset20');
+        const windowsToUpdate = [
+        mainWindow, 
+        previewWindow, 
+        ideaProcessorWindow, 
+        aiChatWindow
+      ];
+      windowsToUpdate.forEach(win => {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('change-font-size', 'reset20');
+        }
+      });  
     }
   },  
       {
@@ -1006,6 +1074,92 @@ ideaProcessorWindow.on('closed', () => {
   });  
 }
 
+function createAiChatWindow() {
+  if (aiChatWindow && !aiChatWindow.isDestroyed()) {
+    aiChatWindow.close();
+    return;
+  }
+  if (!mainWindow) return;
+
+  const isDarkMode = store.get('isDarkMode', false);
+  const savedBounds = store.get('aiChatWindowBounds');
+  
+  aiChatWindow = new BrowserWindow({
+    ...(savedBounds || { width: 400, height: 700 }),
+    minWidth: 350,
+    minHeight: 500,
+//    parent: mainWindow,
+    modal: false,
+    frame: false,
+    show: false,
+    backgroundColor: isDarkMode ? '#333333' : '#EAE3D2',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+    }
+  });
+
+  // did-finish-load と setTimeout で、フリッカーなく表示
+  aiChatWindow.webContents.once('did-finish-load', () => {
+    const lastSessionPath = store.get('lastAiChatSessionPath');
+    if (lastSessionPath) {
+      aiChatWindow?.webContents.send('load-ai-chat-session', lastSessionPath);
+    }    
+    setTimeout(() => {
+      aiChatWindow?.show();
+    }, 50);
+  });
+
+  aiChatWindow.on('close', (e) => {
+    e.preventDefault(); 
+    handleCloseAiChatWindow(); 
+  });
+
+  aiChatWindow.on('closed', () => { aiChatWindow = null; });
+  
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
+  if (is.dev && rendererUrl) {
+    // 開発環境の場合
+    aiChatWindow.loadURL(`${rendererUrl}/ai-chat.html`);
+  } else {
+    // 本番環境の場合
+    aiChatWindow.loadFile(join(__dirname, '../renderer/ai-chat.html'));
+  }
+}
+
+async function handleCloseAiChatWindow() {
+  // 安全のためのガード節
+  if (!aiChatWindow || aiChatWindow.isDestroyed()) {
+    return;
+  }
+
+  // 1. rendererに、isDirtyかどうかを尋ねる
+  const isDirty = await aiChatWindow.webContents.executeJavaScript(
+    'window.electronAPI.isChatDirty()', true
+  ).catch(() => false);
+
+  let confirmClose = true;
+  if (isDirty) {
+    // 2. もしDirtyなら、お馴染みの確認ダイアログを表示
+    const { response } = await dialog.showMessageBox(aiChatWindow, {
+      type: 'question',
+      buttons: ['変更を破棄して閉じる', 'キャンセル'],
+      defaultId: 1, cancelId: 1,
+      message: '保存されていないチャットログがあります。破棄しますか？',
+    });
+    if (response === 1) { // キャンセルが押された
+      confirmClose = false;
+    }
+  }
+
+  // 3. 閉じる事が確定したら…
+  if (confirmClose) {
+    // 4. ★★★ 最後に、boundsを保存してから、ウィンドウを「破壊」する ★★★
+    store.set('aiChatWindowBounds', aiChatWindow.getBounds());
+    aiChatWindow.destroy();
+  }
+}
+
 // ファイルを開いてパースし、データを返すだけのヘルパー関数
 async function parseMrsdFile(filePath: string) {  
   try {
@@ -1280,6 +1434,30 @@ async function scanSystemFontsInternal(): Promise<{ family: string; path: string
 function sanitizeFileName(name: string): string {
   // Windows/macOS/Linuxで共通して使えない文字や、パス区切り文字を置換
   return name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'Untitled';
+}
+
+/**
+ * Geminiのチャットログ(JSON文字列)を、ChatMessage配列に変換する
+ * @param jsonString Geminiのログファイルのコンテンツ
+ */
+function parseGeminiLog(jsonString: string): ChatMessage[] {
+    const data = JSON.parse(jsonString);
+
+    if (data.chunkedPrompt?.chunks && Array.isArray(data.chunkedPrompt.chunks)) {
+        const history: ChatMessage[] = data.chunkedPrompt.chunks
+            // 1. "思考"ではない、実際の会話のやり取りだけをフィルタリング
+            .filter(chunk => !chunk.isThought && chunk.text)
+            // 2. ChatMessage形式に変換
+            .map(chunk => ({
+                role: chunk.role === 'model' ? 'assistant' : 'user',
+                // 3. partsではなく、完全な応答が格納されている 'text' を使う
+                content: (chunk.text as string).trim()
+            }));
+        return history;
+    } else {
+        // もし、将来、さらに別の形式が現れた時のためのフォールバック
+        throw new Error('Unsupported Gemini log format. Only "chunkedPrompt" format is supported.');
+    }
 }
 
 // --- [エリア 3: IPCハンドラ] ---
@@ -1891,6 +2069,15 @@ ipcMain.on('export-as-html', async (_event, dataUrl: string, currentPath: string
       exportWindow.close();
     }
   });
+  ipcMain.on('close-ai-chat-window', () => {
+    if (aiChatWindow && !aiChatWindow.isDestroyed()) {
+      aiChatWindow.close();
+      console.log("0");
+    }
+  });  
+  ipcMain.on('write-to-clipboard', (_event, text: string) => {
+    clipboard.writeText(text);
+  });  
 
 ipcMain.handle('get-pandoc-path', () => {
   // ストアからパスを取得。見つからなければ'pandoc'をデフォルト値とする。
@@ -1976,7 +2163,7 @@ ipcMain.on('interop-message', (_event, message) => {
   }
 });
 
-
+ipcMain.on('open-ai-chat-window', createAiChatWindow);
 
 ipcMain.on('open-export-window', (_event, filePath: string) => {
   if (exportWindow && !exportWindow.isDestroyed()) {
@@ -2474,7 +2661,9 @@ ipcMain.on('apply-system-font', (_event, font: { path: string; family: string })
           case 'open-file':
             return { ...item, click: () => senderWindow.webContents.send('trigger-open-file') };
           case 'import-scrivener':
-            return { ...item, click: () => senderWindow.webContents.send('context-menu-command', 'import-scrivener') };            
+            return { ...item, click: () => senderWindow.webContents.send('context-menu-command', 'import-scrivener') };
+          case 'import-gemini-log':
+            return { ...item, click: () => senderWindow.webContents.send('trigger-import-gemini-log') };                      
           case 'save-file':
             return { ...item, click: () => senderWindow.webContents.send('trigger-save-file') };
           case 'save-as-file':
@@ -2489,6 +2678,20 @@ ipcMain.on('apply-system-font', (_event, font: { path: string; family: string })
             return { ...item, role: 'paste' };
           case 'select-all':
             return { ...item, role: 'selectAll' };
+          case 'ai-chat-clear':
+            return { ...item, click: () => senderWindow.webContents.send('trigger-ai-chat-clear') };
+          case 'ai-chat-load':
+            return { ...item, click: () => senderWindow.webContents.send('trigger-ai-chat-load') };
+          case 'ai-chat-save':
+            return { ...item, click: () => senderWindow.webContents.send('trigger-ai-chat-save') };
+          case 'ai-chat-to-editor':
+            return { ...item, click: () => senderWindow.webContents.send('trigger-ai-chat-to-editor') };            
+          case 'ai-chat-close':
+            return { ...item, click: () => {
+              if (aiChatWindow && !aiChatWindow.isDestroyed()) {
+                aiChatWindow.close();
+              }
+            }};            
           default:
             return item; // clickハンドラが付かない項目（separatorなど）
         }
@@ -2513,9 +2716,23 @@ ipcMain.on('apply-system-font', (_event, font: { path: string; family: string })
 ipcMain.on('request-font-size-change', (_event, action) => {
   console.log(`[Main] Font size change requested: ${action}`);
   // ★ 既存のメニューと同じ号令を、全ウィンドウに送る
-  BrowserWindow.getAllWindows().forEach(win => {
-    win.webContents.send('change-font-size', action);
-  });
+  // BrowserWindow.getAllWindows().forEach(win => {
+  //   win.webContents.send('change-font-size', action);
+  // });
+  // 1. 現在開いている、可能性のあるすべてのウィンドウへの参照を取得
+  const windowsToUpdate = [
+    mainWindow, 
+    previewWindow, 
+    ideaProcessorWindow, 
+    aiChatWindow
+  ];
+
+  // 2. 存在する、そして破壊されていないウィンドウだけに、確実にメッセージを送る
+  windowsToUpdate.forEach(win => {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('change-font-size', action);
+    }
+  });  
 });
 // ★ プレビューからのフォントサイクル要求をハンドル
 ipcMain.on('request-font-cycle', () => {
@@ -2872,6 +3089,238 @@ ipcMain.handle('request-lm-studio-response', async (_event, history: ChatMessage
       });
     }
   });
+
+// --- ハンドラ1: ログの保存 ---
+ipcMain.on('save-ai-chat-log', async (_event, history: ChatMessage[]) => {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+        title: 'Save Chat Log As...',
+        defaultPath: 'chat-log.json',
+        filters: [{ name: 'Pastel Chat Log', extensions: ['json'] }]
+    });
+    if (canceled || !filePath) return;
+
+    const dataToSave = {
+        name: "AI", // (あるいは、ストアから読み込んだアシスタント名)
+        createdAt: Date.now(),
+        // worldSettings: { ... },
+        messages: history.map(msg => ({
+            currentlySelected: 0,
+            versions: [{
+                role: msg.role,
+                type: msg.role === 'user' ? 'singleStep' : 'multiStep',
+                content: msg.role === 'user' ? [{ type: 'text', text: msg.content }] : null,
+                steps: msg.role === 'assistant' 
+                    ? [{ type: 'contentBlock', content: [{ type: 'text', text: msg.content }] }] 
+                    : null,
+            }]
+        }))
+    };
+    await fsPromises.writeFile(filePath, JSON.stringify(dataToSave, null, 2), 'utf-8');
+    store.set('lastAiChatSessionPath', filePath);
+});
+
+// 上書き保存
+ipcMain.on('save-ai-chat-log-overwrite', async (_event, history: ChatMessage[]) => {
+    const lastPath = store.get('lastAiChatSessionPath');
+
+    if (lastPath && existsSync(lastPath)) {
+        try {
+            // Pastel形式への変換ロジック
+            const dataToSave = JSON.stringify({
+        name: "AI", // デフォルト名
+        createdAt: Date.now(),
+        worldSettings: {
+            // 将来のために、現在の設定をここに含める
+        },
+        messages: history.map(msg => ({
+            currentlySelected: 0,
+            versions: [{
+                role: msg.role,
+                type: msg.role === 'user' ? 'singleStep' : 'multiStep',
+                content: msg.role === 'user' ? [{ type: 'text', text: msg.content }] : null,
+                steps: msg.role === 'assistant' ? [{ type: 'contentBlock', content: [{ type: 'text', text: msg.content }] }] : null,
+            }]
+        }))
+    });
+            await fsPromises.writeFile(lastPath, dataToSave, 'utf-8');
+            // (オプション：成功をrendererに通知する)
+        } catch (e) {
+            // (オプション：失敗をrendererに通知する)
+        }
+    } else {
+        // もしパスがなければ、「名前を付けて保存」を代わりに実行
+        // 'save-ai-chat-log' は 'on' なので、'emit' ではなく、
+        // rendererに「名前を付けて保存ダイアログを開いて」と逆にお願いするのが良い
+        const win = BrowserWindow.fromWebContents(_event.sender);
+        win?.webContents.send('trigger-ai-chat-save'); // renderer側でこのイベントをリッスン
+    }
+});
+
+ipcMain.on('update-ai-chat-settings', () => {
+  // ai-chatウィンドウに、「設定が変わったから、UIを更新して」と伝える
+  if (aiChatWindow && !aiChatWindow.isDestroyed()) {
+    aiChatWindow.webContents.send('ai-chat-settings-updated');
+  }
+});
+
+// --- ハンドラ2: ログの読み込み (自動判別) ---
+ipcMain.handle('load-ai-chat-log', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+        filters: [
+          { name: 'Chat Log Files', extensions: ['json', '*'] }
+        ]
+    });
+    if (canceled || !filePaths.length) return null;
+
+    try {
+      const content = await fsPromises.readFile(filePaths[0], 'utf-8');
+      const data = JSON.parse(content);
+
+        let history: ChatMessage[] = [];
+    if (data.chunkedPrompt?.chunks) { // Gemini形式
+        history = parseGeminiLog(content); // 既存のGeminiパーサーを呼び出す
+    } 
+    else if (data.messages) { // LM Studio 形式
+        history = data.messages.map(m => {
+            const v = m.versions?.[m.currentlySelected];
+            if (!v) return null;
+            const finalRole = v.role === 'model' ? 'assistant' : v.role;
+            let t = '';
+            if (v.type === 'singleStep' && v.content?.[0]?.text) {
+                t = v.content[0].text;
+            } else if (v.type === 'multiStep' && v.steps) {
+                const cs = v.steps.find(s => s.type === 'contentBlock');
+                if (cs?.content?.[0]?.text) { t = cs.content[0].text; } 
+                else { return null; }
+            } else { return null; }
+            return { role: finalRole, content: t.trim() };
+        }).filter(Boolean);
+    } else {
+        throw new Error('不明なログ形式です。');
+    }
+    
+    return history;
+
+    } catch (e: any) {
+        dialog.showErrorBox('Import Failed', e.message);
+        return null;
+    }
+});
+
+ipcMain.handle('load-ai-chat-log-by-path', async (_event, filePath: string) => {
+    try {
+        if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+            throw new Error(`Path is not a valid file: ${filePath}`);
+        }
+        
+        const content = await fsPromises.readFile(filePath, 'utf-8');
+      const data = JSON.parse(content);
+
+        let history: ChatMessage[] = [];
+    if (data.chunkedPrompt?.chunks) { // Gemini形式
+        history = parseGeminiLog(content); // 既存のGeminiパーサーを呼び出す
+    } 
+    else if (data.messages) { // Pastel / LM Studio 形式
+        history = data.messages.map(m => {
+            const v = m.versions?.[m.currentlySelected];
+            if (!v) return null;
+            const finalRole = v.role === 'model' ? 'assistant' : v.role;
+            let t = '';
+            if (v.type === 'singleStep' && v.content?.[0]?.text) {
+                t = v.content[0].text;
+            } else if (v.type === 'multiStep' && v.steps) {
+                const cs = v.steps.find(s => s.type === 'contentBlock');
+                if (cs?.content?.[0]?.text) { t = cs.content[0].text; } 
+                else { return null; }
+            } else { return null; }
+            return { role: finalRole, content: t.trim() };
+        }).filter(Boolean);
+    } else {
+        throw new Error('不明なログ形式です。');
+    }
+        return history;
+    } catch (e: any) {
+        console.error(`Failed to load chat log from path: ${filePath}`, e);
+        return null;
+    }
+});
+
+// --- ハンドラ3: Geminiログを、プレーンテキストに変換して保存 ---
+ipcMain.handle('import-gemini-log-as-text', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+        title: 'Import Gemini Log as a New Tab',
+        filters: [{ name: 'All Files', extensions: ['*'] }] // Geminiログは拡張子がない
+    });
+    if (canceled || !filePaths.length) return null;
+
+    const sourcePath = filePaths[0];
+    try {
+        const fileContent = await fsPromises.readFile(sourcePath, 'utf-8');
+        const history = parseGeminiLog(fileContent); 
+        
+        // テキスト形式に変換
+        const textContent = history.map(m => 
+            `■ ${m.role === 'user' ? 'User' : 'AI'}\n\n${m.content}`
+        ).join('\n\n---\n\n');
+        
+        // ★ ファイル名と、変換後のテキストコンテンツを、rendererに返す
+        return {
+            title: basename(sourcePath) + '.txt',
+            content: textContent
+        };
+
+    } catch (e: any) {
+        dialog.showErrorBox('Import Failed', e.message);
+        return null;
+    }
+});
+
+ipcMain.on('send-chat-to-editor', (_event, title: string, content: string) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('import-text-as-new-tab', title, content);
+  }
+});
+
+ipcMain.handle('select-image-file', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+        title: 'Select Icon Image',
+        filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+        properties: ['openFile']
+    });
+    if (canceled || !filePaths.length) return null;
+    const filePath = filePaths[0];
+    try {
+        // ★ ファイルを読み込み、Base64 Data URLに変換する
+        const buffer = await fsPromises.readFile(filePath);
+        const mimeType = getLookup()(filePath) || 'image/png'; // mime-typesライブラリを使用
+        const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`;
+        
+        // ★ パスと、Data URLの両方を返す
+        return { path: filePath, dataUrl: dataUrl };
+    } catch (e) {
+        return null;
+    }
+});
+
+ipcMain.handle('convert-path-to-data-url', async (_event, filePath: string) => {
+    if (!filePath || !existsSync(filePath)) return null;
+    try {
+        const buffer = await fsPromises.readFile(filePath);
+        const mimeType = getLookup()(filePath) || 'image/png';
+        return `data:${mimeType};base64,${buffer.toString('base64')}`;
+    } catch (e) {
+        return null;
+    }
+});
+
+ipcMain.handle('is-chat-dirty', (event) => {
+  // ★ mainは、rendererに「状態を報告せよ」と、逆質問するだけ
+  const webContents = event.sender;
+  return new Promise(resolve => {
+    ipcMain.once('response-chat-dirty-state', (_e, isDirty) => resolve(isDirty));
+    webContents.send('request-chat-dirty-state');
+  });
+});
 
 }
 

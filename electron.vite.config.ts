@@ -26,6 +26,7 @@ export default defineConfig({
           settings_window: resolve(__dirname, 'src/renderer/settings.html'),
           export_window: resolve(__dirname, 'src/renderer/export.html'),
           idea_processor_window: resolve(__dirname, 'src/renderer/idea-processor.html'),
+          ai_chat_window: resolve(__dirname, 'src/renderer/ai-chat.html'),
         }
       }
     }

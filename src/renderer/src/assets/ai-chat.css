@@ -1,0 +1,286 @@
+@font-face {
+  font-family: 'Noto Custom'; 
+  src: url(../../../../resources/fonts/NotoSerifJP-VariableFont_wght.ttf);
+} 
+/* --- 基本設定 --- */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Noto Custom', monospace;
+  background-color:#EAE3D2;
+  color: black;
+}
+body.dark-mode {
+  background-color: #000000; 
+  color: #00ff00; 
+
+  text-shadow: 
+    0 0 5px rgba(0, 255, 0, 0.5), /* 内側の、最も強い輝き */
+    0 0 10px rgba(0, 255, 0, 0.4), /* 中間の、拡散する輝き */
+    0 0 20px rgba(0, 255, 0, 0.3); /* 外側の、最も淡い輝き */
+}
+
+/* --- タイトルバー --- */
+#title-bar {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 32px;
+  -webkit-app-region: drag;
+}
+.top-right-buttons {
+  position: absolute; top: 4px; right: 4px;
+  -webkit-app-region: no-drag;
+}
+.top-right-buttons button {
+  background: rgba(0,0,0,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  border-radius: 30%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: center;
+  -webkit-app-region: no-drag;
+  z-index: 150;
+  }
+body.dark-mode .top-right-buttons button {
+  color: #3e3;
+  border: 1px solid rgba(55,255,55,0.3);
+}
+/* --- チャットコンテナ --- */
+#chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+  padding-top: 32px; /* タイトルバーの分を空ける */
+  padding-left: 5%;
+  background-color:transparent;
+}
+
+#chat-log {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+#chat-form {
+  flex-shrink: 0;
+  display: flex;
+  padding: 10px;
+  border-top: 1px solid rgba(0,0,0,0.1);
+}
+body.dark-mode #chat-form {
+  border-top: 0px solid rgba(255,255,255,0.1);
+}
+
+/* --- 入力エリア --- */
+#message-input {
+  flex-grow: 1;
+  resize: none;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  max-height: 288px; /* 12行分 (24px * 12) */
+  resize: none;
+}
+body.dark-mode #message-input {
+  background-color: #000;
+  color: #5f5;
+  border: 2px solid  #5959;
+}
+
+#send-btn {
+    width: 60px; 
+    flex-shrink: 0; 
+    margin-left: 10px; 
+    padding: 8px 16px; 
+    border: none; 
+    background: linear-gradient(to bottom, #4CAF50, #45a049); 
+    color: white; 
+    font-weight: bold; 
+    border-radius: 18px; 
+    cursor: pointer; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2); 
+    transition: all 0.2s ease; 
+    font-family: inherit; 
+    vertical-align: middle;
+    -webkit-app-region: no-drag;
+  }
+
+body.dark-mode #send-btn {  
+  background: linear-gradient(#4caf4f46, #45a049d8); 
+  }
+
+
+
+#chat-log::-webkit-scrollbar ,
+.edit-textarea::-webkit-scrollbar, .cyber-text::-webkit-scrollbar{
+  height: 16px; 
+}
+#chat-log::-webkit-scrollbar-track, .cyber-text::-webkit-scrollbar-track {
+  background: transparent; 
+}
+#chat-log::-webkit-scrollbar-thumb, .cyber-text::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  min-width: 40px;
+}
+body.dark-mode #chat-log::-webkit-scrollbar-thumb, body.dark-mode .cyber-text::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+body.dark-mode #message-input:focus {
+  outline: none;
+  border-color: #00ff00; 
+  box-shadow: 
+    0 0 5px rgba(0, 255, 0, 0.8),
+    0 0 10px rgba(0, 255, 0, 0.6); /* グローエフェクト */
+}
+body.dark-mode #message-input::placeholder {
+  color: #50ff5090; 
+}
+#edit-container{
+  background-color: transparent;
+}
+#edit-container:focus{
+  outline: none;
+}
+
+.message-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.message-row.user {
+  flex-direction: row-reverse; /* DOMの順番を、見た目上だけ逆にする */
+}
+.message-row.user .message-sender {
+  text-align: right;
+}
+
+.avatar-container {
+  display: flex;
+  flex-direction: column; /* ★ アイコンとボタンを縦に並べる */
+  align-items: center; /* ★ 中央揃えにする */
+  width: 64px; /* アイコンの幅に合わせる */
+  flex-shrink: 0;
+}
+.message-icon {   
+  width: 48px; 
+  height: 48px;
+  border-radius: 50%; 
+  object-fit: cover; }
+.message-content { display: flex; flex-direction: column; }
+.message-sender { font-size: 0.8em; color: #333; margin-bottom: 4px; }
+body.dark-mode .message-sender { font-size: 0.8em; color: #0f0; margin-bottom: 4px; }
+/* --- チャットバルーン  --- */
+.message-bubble {
+  /* background-color: #FAF9F5;  */
+  background-color: ivory; 
+  padding: 2%;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  max-width: 80%;
+  white-space: pre-wrap; 
+  word-break: break-all;  
+  min-height: 4em;
+  min-width: 15em;
+  display: flex; /* これにより、中のテキストが上下中央揃えになる */
+  align-items: center;  
+}
+body.dark-mode .message-bubble {
+  background-color: transparent;
+  border: 2px solid rgba(0, 255, 0, 0.3);
+}
+
+.message-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px; /* ★ アイコンとの間の隙間 */
+}
+
+.action-btn {
+  width: 24px;
+  height: 24px;
+  background-color: transparent;
+  border: 0px ;
+  cursor: pointer;
+  background-size: 14px 14px;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.action-btn:hover {
+  opacity: 1;
+}
+
+.cyber-button {
+  background-color: transparent;
+  border-color: #0005;
+  border-width: 1px;
+  border-radius: 10px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-family: 'Noto Custom', monospace;
+  font-weight: bold;
+}
+body.dark-mode .cyber-button {
+  color: #00ff00;
+  border-color: #0f00;
+}
+body.dark-mode .cyber-button:hover {
+  box-shadow: 0 0 5px #00ff00;
+}
+.cyber-text {
+  border-color: #0005;
+  border-width: 1px;
+  border-radius: 5px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-family: 'Noto Custom', monospace;
+  font-style: oblique;
+  resize: none;
+}
+body.dark-mode .cyber-text {
+  color: #0f0;
+  background-color: #3339;
+  border-color: #0f09;
+}
+.cyber-text:focus {
+  outline: none;
+}
+
+
+/* 各ボタンのアイコンを、SVGデータとしてCSSに埋め込む */
+.btn-edit {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z'%3E%3C/path%3E%3C/svg%3E");
+}
+body.dark-mode .btn-edit {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300ff00' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z'%3E%3C/path%3E%3C/svg%3E");
+}
+.btn-delete {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='3 6 5 6 21 6'%3E%3C/polyline%3E%3Cpath d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'%3E%3C/path%3E%3C/svg%3E");
+}
+body.dark-mode .btn-delete {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300ff00' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='3 6 5 6 21 6'%3E%3C/polyline%3E%3Cpath d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'%3E%3C/path%3E%3C/svg%3E");
+}
+.btn-regenerate {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='23 4 23 10 17 10'%3E%3C/polyline%3E%3Cpath d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'%3E%3C/path%3E%3C/svg%3E");
+}
+body.dark-mode .btn-regenerate {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300ff00' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='23 4 23 10 17 10'%3E%3C/polyline%3E%3Cpath d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'%3E%3C/path%3E%3C/svg%3E");
+}
+.btn-copy {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='13' height='13' rx='2' ry='2'%3E%3C/rect%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'%3E%3C/path%3E%3C/svg%3E");
+}
+body.dark-mode .btn-copy {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300ff00' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='13' height='13' rx='2' ry='2'%3E%3C/rect%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'%3E%3C/path%3E%3C/svg%3E");
+}

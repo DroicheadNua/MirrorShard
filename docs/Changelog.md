@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2025-11-XX  
+
+### Added (新機能)  
+- AIチャットウィンドウを実装(Ctrl+Shift+Aで起動)。詳細は「AI機能使用ガイド.md」を参照
+- 「高度な設定 」(F2)を拡充、  AIチャットに対応（アイコン設定、表示名のカスタマイズなど）
+- メインエディタの右クリックメニューからGemini（Google AI studio）のログをインポートできるように  
+
+### Changed (変更点)  
+
+### Fixed (修正点)  
+- Chain of Thoughtのボタンホバー時の説明が間違っていた（ショートカットキーがCtrl+Shift+TではなくCtrl+Shift+Aと誤記されていた）のを修正  
+
 ## [1.4.0] - 2025-11-1  
 
 ### Added (新機能)  

@@ -326,6 +326,23 @@ onTriggerSaveFile: (callback) => {
   requestLmStudioResponse: (history) => 
       ipcRenderer.invoke('request-lm-studio-response', history),   
   showInfoDialog: (message) => ipcRenderer.send('show-info-dialog', message),
+  openAiChatWindow: () => ipcRenderer.send('open-ai-chat-window'),
+  closeAiChatWindow: () => ipcRenderer.send('close-ai-chat-window'),
+  writeToClipboard: (text) => ipcRenderer.send('write-to-clipboard', text),
+  importGeminiLogAsText: () => ipcRenderer.invoke('import-gemini-log-as-text'),
+  convertGeminiLogToText: () => ipcRenderer.send('convert-gemini-log-to-text'),  
+  saveAiChatLog: (history, format) => ipcRenderer.send('save-ai-chat-log', history, format),
+  loadAiChatLog: () => ipcRenderer.invoke('load-ai-chat-log'),  
+  loadAiChatLogByPath: (filePath) => ipcRenderer.invoke('load-ai-chat-log-by-path', filePath),
+  onGlobalFontSizeChange: (callback) => ipcRenderer.on('change-font-size', (_event, action) => callback(action)),  
+  sendChatToEditor: (title, content) => ipcRenderer.send('send-chat-to-editor', title, content),
+  selectImageFile: () => ipcRenderer.invoke('select-image-file'),
+  saveAiChatLogOverwrite: (history) => ipcRenderer.send('save-ai-chat-log-overwrite', history),
+  updateAiChatSettings: () => ipcRenderer.send('update-ai-chat-settings'),  
+  convertPathToDataUrl: (filePath) => ipcRenderer.invoke('convert-path-to-data-url', filePath),
+  isChatDirty: () => ipcRenderer.invoke('is-chat-dirty'),
+  onRequestChatDirtyState: (callback) => ipcRenderer.on('request-chat-dirty-state', callback),
+  responseChatDirtyState: (isDirty) => ipcRenderer.send('response-chat-dirty-state', isDirty),  
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

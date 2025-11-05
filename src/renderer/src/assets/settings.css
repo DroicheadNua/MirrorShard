@@ -10,11 +10,11 @@ html, body {
   line-height:1.2;
 }
 
-#font-settings, #external-tools-settings, #custom-resources, #ai-keys {
+#font-settings, #external-tools-settings, #custom-resources, #ai-keys ,#ai-chat-settings{
     -webkit-app-region:no-drag;
     line-height:1.3;
 }
-#ai-keys {
+#ai-keys ,#ai-chat-settings{
     line-height:2;
 }
 
@@ -38,4 +38,16 @@ html, body {
 
 #close-settings-btn:hover {
   background-color: #e0e0e0;
+}
+
+body::-webkit-scrollbar {
+  height: 16px; 
+}
+body::-webkit-scrollbar-track {
+  background: transparent; 
+}
+body::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  min-width: 40px;
 }

@@ -767,6 +767,7 @@ const showEditorContextMenu = (targetView: EditorView) => {
         { type: 'separator' },
         { id: 'open-file', label: 'ファイルを開く...' },
         { id: 'import-scrivener', label: 'Scrivenerからインポート' },
+        { id: 'import-gemini-log', label: 'Geminiログをインポート' },
         { id: 'save-file', label: 'ファイルを保存...' },
         { id: 'save-as-file', label: '名前を付けて保存...' },
         { type: 'separator' },
@@ -1438,6 +1439,7 @@ async function initializeApp() {
     const timeEl = document.getElementById('status-time');
     const settingsBtn = document.getElementById('settings-btn');
     const exportBtn = document.getElementById('export-btn');
+    const AIChatBtn = document.getElementById('open-ai-chat-btn');
 
     if (!outlineContainer || !collapseAllBtn /* ... */) {
         console.error("Initialization failed: UI elements are missing.");
@@ -1485,6 +1487,9 @@ exportBtn?.addEventListener('click', () => {
   } else {
     alert('ファイルを一度保存してください。');
   }
+});
+AIChatBtn?.addEventListener('click', () => {
+    window.electronAPI.openAiChatWindow();
 });
 
     mainContent?.addEventListener('contextmenu', (event) => {
@@ -1668,7 +1673,41 @@ exportBtn?.addEventListener('click', () => {
       importFromScrivener();
     }
   });
+window.electronAPI.on('trigger-import-gemini-log', async () => {
+    // 1. mainに、インポート処理を依頼し、結果を待つ
+    const result = await window.electronAPI.importGeminiLogAsText();
+    
+    // 2. 結果が返ってきたら、新しいタブとして開く
+    if (result) {
+        const newFile: ProjectFile = {
+            id: crypto.randomUUID(),
+            filePath: null,
+            title: result.title,
+            state: createNewState(result.content),
+            isDirty: true,
+            encoding: 'UTF8', 
+            eol: 'LF',  
+            encodingWarning: undefined, 
+        };
+        state.projectFiles.push(newFile);
+        switchFile(newFile.id);
+    }
+});
 
+window.electronAPI.on('import-text-as-new-tab', (title: string, content: string) => {
+    const newFile: ProjectFile = {
+        id: crypto.randomUUID(),
+        filePath: null,
+        title: title,
+        state: createNewState(content),
+        isDirty: true,
+        encoding: 'UTF8',
+        eol: 'LF',
+        encodingWarning: undefined,
+    };
+    state.projectFiles.push(newFile);
+    switchFile(newFile.id);
+});
 
 // ★★★ settingsウィンドウからの、直接のメッセージを受け取る ★★★
 window.interop.onMainMessage('revert-to-cycle-bgm', () => {
