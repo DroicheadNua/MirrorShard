@@ -35,6 +35,7 @@ interface StoreType {
   customBgmPath?: string;  
   isFullscreen?: boolean;
   ideaProcessorIsMaximized?: boolean;
+  aiChatIsMaximized?: boolean;
   isIpAlwaysOnTop?: boolean; 
   isPreviewAlwaysOnTop?: boolean;
   aiResponseMaxLength?: number;
@@ -63,6 +64,7 @@ const store = new Store<StoreType>({
     isRightAlign: false,
     isFullscreen: false,
     ideaProcessorIsMaximized: false,
+    aiChatIsMaximized: false,
     isIpAlwaysOnTop: true, 
     isPreviewAlwaysOnTop: true,    
     aiResponseMaxLength: 2000,
@@ -407,20 +409,28 @@ function buildMenu(): void {
         const focusedWindow = BrowserWindow.getFocusedWindow();
         if (!focusedWindow) return;
         if (focusedWindow === ideaProcessorWindow) {
-          handleOpenIdeaProcessorFile(); 
-        } else {
+            handleOpenIdeaProcessorFile(); 
+          } else if (focusedWindow === aiChatWindow) {
+            focusedWindow.webContents.send('trigger-ai-chat-load');
+          } else {
             BrowserWindow.getFocusedWindow()?.webContents.send('trigger-open-file');
           }
          }
         },
 
-{
-  label: 'Save File',
-  accelerator: 'CmdOrCtrl+S',
-  click: () => {
-    BrowserWindow.getFocusedWindow()?.webContents.send('trigger-save-file');
-  }
-},
+        {
+          label: 'Save File',
+          accelerator: 'CmdOrCtrl+S',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (!focusedWindow)return;
+            if (focusedWindow === aiChatWindow) {
+                focusedWindow.webContents.send('trigger-ai-chat-overwrite-save');
+            } else {
+                focusedWindow?.webContents.send('trigger-save-file');
+            }
+          }
+        },
 
         {
           label: 'Recent Files',
@@ -585,19 +595,12 @@ submenu: [
     {
           label: 'Reload',
           accelerator: 'CmdOrCtrl+R',
-          // 開発環境でない場合は、何もしない
-          click: (_, focusedWindow) => { 
-            const win = focusedWindow as BrowserWindow;
-            if (is.dev && win) win.reload(); 
-          }
+          click: () => { /* 常に何もしない */ }
     },
     {
           label: 'Force Reload',
           accelerator: 'CmdOrCtrl+Shift+R',
-          click: (_, focusedWindow) => { 
-            const win = focusedWindow as BrowserWindow;
-            if (is.dev && win) win.webContents.reloadIgnoringCache(); 
-          }
+          click: () => { /* 常に何もしない */ }
     },
     { role: 'toggleDevTools' as const },
     { type: 'separator' as const },
@@ -651,14 +654,19 @@ submenu: [
     accelerator: 'CmdOrCtrl+Shift+W',
     click: () => BrowserWindow.getFocusedWindow()?.webContents.send('trigger-focus-mode')
   },  
-{
-  label: 'Toggle Zen Mode',
-  accelerator: 'CmdOrCtrl+Shift+C',
-  click: () => {
-    // 現在フォーカスされているウィンドウを取得し、そこに命令を送る
-    BrowserWindow.getFocusedWindow()?.webContents.send('trigger-zen-mode')
-}
-},
+    {
+      label: 'Toggle Zen Mode',
+      accelerator: 'CmdOrCtrl+Shift+C',
+      click: () => {
+        const focusedWindow = BrowserWindow.getFocusedWindow();
+        if (!focusedWindow) return;
+        if (focusedWindow === aiChatWindow) {
+            focusedWindow.webContents.send('trigger-ai-chat-clear');
+        } else {
+            focusedWindow.webContents.send('trigger-zen-mode');
+        }
+      }
+    },
     {
       label: 'Toggle Outline Panel',
       accelerator: 'CmdOrCtrl+Shift+O',
@@ -706,7 +714,7 @@ submenu: [
       accelerator: process.platform === 'darwin' ? 'Cmd+Ctrl+F' : 'F11',
       click: (_, focusedWindow) => {
         if (!focusedWindow) return;
-        if (focusedWindow === ideaProcessorWindow || focusedWindow === previewWindow) {
+        if (focusedWindow === ideaProcessorWindow || focusedWindow === previewWindow || focusedWindow === aiChatWindow) {
             // --- サブウィンドウの処理 (最大化) ---
             if (!focusedWindow.isMaximized()) {
                 // 保存してから最大化
@@ -714,6 +722,8 @@ submenu: [
                     store.set('ideaProcessorWindow.bounds', focusedWindow.getBounds());
                 } else if (focusedWindow === previewWindow) {
                     store.set('previewBounds', focusedWindow.getBounds());
+                } else if (focusedWindow === aiChatWindow) {
+                    store.set('aiChatWindowBounds', focusedWindow.getBounds());
                 }
                 focusedWindow.maximize();
             } else {
@@ -1083,12 +1093,14 @@ function createAiChatWindow() {
 
   const isDarkMode = store.get('isDarkMode', false);
   const savedBounds = store.get('aiChatWindowBounds');
+  const savedIsFullscreen = store.get('aiChatIsMaximized', false);
   
   aiChatWindow = new BrowserWindow({
     ...(savedBounds || { width: 400, height: 700 }),
     minWidth: 350,
     minHeight: 500,
-//    parent: mainWindow,
+    parent: undefined,
+    fullscreenable:false,
     modal: false,
     frame: false,
     show: false,
@@ -1098,6 +1110,11 @@ function createAiChatWindow() {
       sandbox: false,
     }
   });
+
+    if (savedIsFullscreen) {
+    aiChatWindow.setFullScreen(true);
+    aiChatWindow.maximize();
+  }
 
   // did-finish-load と setTimeout で、フリッカーなく表示
   aiChatWindow.webContents.once('did-finish-load', () => {
@@ -1154,8 +1171,11 @@ async function handleCloseAiChatWindow() {
 
   // 3. 閉じる事が確定したら…
   if (confirmClose) {
-    // 4. ★★★ 最後に、boundsを保存してから、ウィンドウを「破壊」する ★★★
-    store.set('aiChatWindowBounds', aiChatWindow.getBounds());
+    const isMaximized = aiChatWindow.isMaximized();
+    store.set('aiChatIsMaximized', isMaximized);
+    if (!isMaximized) {
+      store.set('aiChatWindowBounds', aiChatWindow.getBounds());
+    }
     aiChatWindow.destroy();
   }
 }
@@ -2072,7 +2092,6 @@ ipcMain.on('export-as-html', async (_event, dataUrl: string, currentPath: string
   ipcMain.on('close-ai-chat-window', () => {
     if (aiChatWindow && !aiChatWindow.isDestroyed()) {
       aiChatWindow.close();
-      console.log("0");
     }
   });  
   ipcMain.on('write-to-clipboard', (_event, text: string) => {
@@ -2983,7 +3002,7 @@ ipcMain.on('request-toggle-fullscreen', (event) => {
   if (!senderWindow) return;
 
   // ★★★ メニューのclickハンドラと、全く同じロジックを実行 ★★★
-  if (senderWindow === ideaProcessorWindow || senderWindow === previewWindow) {
+  if (senderWindow === ideaProcessorWindow || senderWindow === previewWindow || senderWindow === aiChatWindow) {
       // --- サブウィンドウの処理 (最大化) ---
       if (!senderWindow.isMaximized()) {
           // 保存してから最大化
@@ -2991,6 +3010,8 @@ ipcMain.on('request-toggle-fullscreen', (event) => {
               store.set('ideaProcessorWindow.bounds', senderWindow.getBounds());
           } else if (senderWindow === previewWindow) {
               store.set('previewBounds', senderWindow.getBounds());
+          } else if (senderWindow === aiChatWindow) {
+              store.set('aiChatWindowBounds', senderWindow.getBounds());
           }
           senderWindow.maximize();
       } else {
@@ -3095,7 +3116,7 @@ ipcMain.on('save-ai-chat-log', async (_event, history: ChatMessage[]) => {
     const { canceled, filePath } = await dialog.showSaveDialog({
         title: 'Save Chat Log As...',
         defaultPath: 'chat-log.json',
-        filters: [{ name: 'Pastel Chat Log', extensions: ['json'] }]
+        filters: [{ name: 'MirrorShard Chat Log', extensions: ['json'] }]
     });
     if (canceled || !filePath) return;
 
@@ -3123,9 +3144,9 @@ ipcMain.on('save-ai-chat-log', async (_event, history: ChatMessage[]) => {
 ipcMain.on('save-ai-chat-log-overwrite', async (_event, history: ChatMessage[]) => {
     const lastPath = store.get('lastAiChatSessionPath');
 
-    if (lastPath && existsSync(lastPath)) {
+    if (lastPath) {
         try {
-            // Pastel形式への変換ロジック
+            // MirrorShard独自形式への変換ロジック
             const dataToSave = JSON.stringify({
         name: "AI", // デフォルト名
         createdAt: Date.now(),
@@ -3145,7 +3166,7 @@ ipcMain.on('save-ai-chat-log-overwrite', async (_event, history: ChatMessage[]) 
             await fsPromises.writeFile(lastPath, dataToSave, 'utf-8');
             // (オプション：成功をrendererに通知する)
         } catch (e) {
-            // (オプション：失敗をrendererに通知する)
+            dialog.showErrorBox('Save Failed', `Failed to overwrite file: ${lastPath}`);
         }
     } else {
         // もしパスがなければ、「名前を付けて保存」を代わりに実行
@@ -3171,9 +3192,10 @@ ipcMain.handle('load-ai-chat-log', async () => {
         ]
     });
     if (canceled || !filePaths.length) return null;
-
+    const filePath = filePaths[0];
+console.log("normal");
     try {
-      const content = await fsPromises.readFile(filePaths[0], 'utf-8');
+      const content = await fsPromises.readFile(filePath, 'utf-8');
       const data = JSON.parse(content);
 
         let history: ChatMessage[] = [];
@@ -3198,7 +3220,7 @@ ipcMain.handle('load-ai-chat-log', async () => {
     } else {
         throw new Error('不明なログ形式です。');
     }
-    
+    store.set('lastAiChatSessionPath', filePath);
     return history;
 
     } catch (e: any) {
@@ -3212,7 +3234,7 @@ ipcMain.handle('load-ai-chat-log-by-path', async (_event, filePath: string) => {
         if (!existsSync(filePath) || !statSync(filePath).isFile()) {
             throw new Error(`Path is not a valid file: ${filePath}`);
         }
-        
+        console.log("bypath");
         const content = await fsPromises.readFile(filePath, 'utf-8');
       const data = JSON.parse(content);
 
@@ -3220,7 +3242,7 @@ ipcMain.handle('load-ai-chat-log-by-path', async (_event, filePath: string) => {
     if (data.chunkedPrompt?.chunks) { // Gemini形式
         history = parseGeminiLog(content); // 既存のGeminiパーサーを呼び出す
     } 
-    else if (data.messages) { // Pastel / LM Studio 形式
+    else if (data.messages) { //MirrorShard / LM Studio 形式
         history = data.messages.map(m => {
             const v = m.versions?.[m.currentlySelected];
             if (!v) return null;
@@ -3238,6 +3260,7 @@ ipcMain.handle('load-ai-chat-log-by-path', async (_event, filePath: string) => {
     } else {
         throw new Error('不明なログ形式です。');
     }
+    store.set('lastAiChatSessionPath', filePath);
         return history;
     } catch (e: any) {
         console.error(`Failed to load chat log from path: ${filePath}`, e);
@@ -3320,6 +3343,18 @@ ipcMain.handle('is-chat-dirty', (event) => {
     ipcMain.once('response-chat-dirty-state', (_e, isDirty) => resolve(isDirty));
     webContents.send('request-chat-dirty-state');
   });
+});
+
+ipcMain.handle('confirm-dialog', async (event, message: string) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return false;
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question',
+    buttons: ['OK', 'キャンセル'],
+    defaultId: 0, cancelId: 1,
+    message: message
+  });
+  return response === 0;
 });
 
 }

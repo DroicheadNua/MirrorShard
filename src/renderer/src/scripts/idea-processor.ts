@@ -2282,10 +2282,10 @@ if (templateName === 'greimas') {
     const FONT_SIZE = 14; // 可読性のためのフォントサイズ調整
 
     // --- ノードの定義 ---
-    const sujet = createTemplateNode({ x: 400, y: 320, title: '主体', placeholder: '主人公は誰か？' });
-    const objet = createTemplateNode({ x: 400, y: 170, title: '対象', placeholder: '主人公が追い求める宝物' });
-    const destinateur = createTemplateNode({ x: 170, y: 170, title: '送り手', placeholder: '誰が使命を与えたか？' });
-    const destinataire = createTemplateNode({ x: 630, y: 170, title: '受け手', placeholder: '誰が宝物を得るのか？' });
+    const sujet = createTemplateNode({ x: 400, y: 320, title: '主体', placeholder: '主人公' });
+    const objet = createTemplateNode({ x: 400, y: 170, title: '対象', placeholder: '主人公の目的' });
+    const destinateur = createTemplateNode({ x: 170, y: 170, title: '送り手', placeholder: '主人公に目的を指示する存在（命令者、依頼人など）' });
+    const destinataire = createTemplateNode({ x: 630, y: 170, title: '受け手', placeholder: '主人公の行動によって利益を得る存在' });
     const adjuvant = createTemplateNode({ x: 170, y: 320, title: '援助者', placeholder: '主人公を助ける仲間や道具' });
     const opposant = createTemplateNode({ x: 630, y: 320, title: '敵対者', placeholder: '主人公を妨害する敵対者' });
     
@@ -2386,18 +2386,18 @@ if (templateName === 'greimas') {
     group.findOne<Konva.Rect>('.background')?.size({ width: 1050, height: 550 });
     
     const beatData = [
-      { title: '1. オープニング', placeholder: '物語のテーマと、主人公の「ビフォー」の状態を、一枚の絵で見せるようなシーンは？' },
-      { title: '2. 事件の発生', placeholder: 'その日常を破壊し、主人公を物語へと強制的に引きずり込む「事件」は何か？' },
-      { title: '3. 決意', placeholder: 'なぜ、主人公は「もう後戻りできない」と決断するのか？ 非日常の世界へ足を踏み入れる。' },
-      { title: '4. 新しい世界', placeholder: '主人公が飛び込んだ非日常の世界。そこで出会う、仲間、敵、そして、この世界の「ルール」は何か？' },
-      { title: '5. 中盤の偽りの勝利', placeholder: '物語の中間点。主人公は、目的を達成したかのように見える。しかし、それは本当の解決ではない。' },
-      { title: '6. 絶望の淵', placeholder: '偽りの勝利は崩れ去り、主人公はすべてを失う。物語の最も暗い瞬間。' },
-      { title: '7. 内なる気づき', placeholder: '絶望の底で、主人公が発見する「真実」は何か？ 自分の弱さと向き合い、本当に「必要なこと」に気づく。' },
-      { title: '8. 反撃の計画', placeholder: '新たな気づきを得た主人公が、最後の戦いに向けて、決死の計画を立てる。' },
-      { title: '9. クライマックス', placeholder: '計画を実行し、最大の敵と対決する。旅を通して学んだ、新しい「力」が試される。' },
-      { title: '10. 最後のひねり', placeholder: 'すべてが終わったかと思った瞬間、最後の障害、あるいは、驚くべき真実が明らかになる。' },
-      { title: '11. 最終的な解決', placeholder: '主人公が、その最後の障害をも乗り越え、物語のすべての問題に、真の「決着」をつける。' },
-      { title: '12. エンディング', placeholder: '物語の後の世界。主人公は、どのように「変化」したか？オープニングとは対になる、最後の一枚の絵。' },
+      { title: '1. オープニング', placeholder: '主人公の登場とテーマの提示' },
+      { title: '2. 事件の発生', placeholder: 'その日常を破壊し、主人公を物語へと強制的に引きずり込む「何か」が発生する' },
+      { title: '3. 決意', placeholder: '主人公は決意を固め、非日常の世界へ足を踏み入れる' },
+      { title: '4. 新しい世界', placeholder: '主人公が飛び込んだ非日常の世界。そこで出会う仲間と敵、そしてこの世界の「ルール」' },
+      { title: '5. 挫折', placeholder: '物語の中間点。主人公は壁に突き当たる。あるいは、目的を達成したかのように見えたが、それは偽りだった' },
+      { title: '6. 絶望', placeholder: '偽りの勝利は崩れ去り、主人公はすべてを失う。物語の最も暗い瞬間' },
+      { title: '7. 転機', placeholder: '主人公は絶望の底で己と向き合い、そこで何かを見出す' },
+      { title: '8. 反撃', placeholder: '新たな悟り（あるいは新たな力）を得た主人公は最後の戦いに向かう' },
+      { title: '9. クライマックス', placeholder: '最後の戦いが始まる' },
+      { title: '10. 最後の障害', placeholder: 'すべてが終わったかと思った瞬間、最後の障害、あるいは、驚くべき真実が明らかになる。' },
+      { title: '11. 決着', placeholder: '主人公が、その最後の障害をも乗り越えて勝利する' },
+      { title: '12. エンディング', placeholder: '物語の結末。主人公は何を得て、どのように変化したか' },
     ];
 
     const createdNodes: Konva.Group[] = [];
@@ -2444,7 +2444,7 @@ if (templateName === 'greimas') {
       group.findOne<Konva.Rect>('.background')?.size({ width: 800, height: 250 });
 
       const actData = [
-        { title: '第一幕：発端 (Beginning)', placeholder: '物語の世界観と主人公を紹介し、最初の事件（インサイティング・インシデント）が起こるまでのパート。全体の約25%。' },
+        { title: '第一幕：発端 (Beginning)', placeholder: '物語の世界観と主人公を紹介し、最初の事件が起こるまでのパート。全体の約25%。' },
         { title: '第二幕：葛藤 (Middle)', placeholder: '主人公が障害に直面し、試行錯誤し、成長（あるいは堕落）していく、物語で最も長いパート。全体の約50%。' },
         { title: '第三幕：結末 (End)', placeholder: '物語のクライマックスと、その後の結末を描く、最後のパート。全体の約25%。' },
       ];

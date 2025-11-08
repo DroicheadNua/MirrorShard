@@ -9,11 +9,12 @@
   <!-- 1. ドラッグとボタンのための、透明なタイトルバー -->
   <div id="title-bar">
     <div class="top-right-buttons">
-      <button id="ai-save-overwrite-btn" title="Save Log">S</button>
+      <button id="ai-clear-log-btn" title="Clear Log (Ctrl+Shift+C)">C</button>
+      <button id="ai-save-overwrite-btn" title="Save Log (Ctrl+S)">S</button>
       <button id="ai-save-log-btn" title="Save As">A</button>
-      <button id="ai-load-log-btn" title="Load Log">L</button>
-      <button id="ai-fullscreen-btn" title="Toggle Maximize">⤢</button>
-      <button id="ai-close-btn" title="Close Window">×</button>
+      <button id="ai-load-log-btn" title="Load Log (Ctrl+O)">L</button>
+      <button id="ai-fullscreen-btn" title="Toggle Maximize (F11)">⤢</button>
+      <button id="ai-close-btn" title="Close Window (Ctrl+Shift+A)">×</button>
     </div>
   </div>
 
@@ -28,7 +29,7 @@
       <button id="send-btn" type="submit">Run</button>
     </form>
   </div>
-  
+  <div id="notification-container"></div> 
   <script type="module" src="./src/ai-chat.ts"></script>
 </body>
 </html>

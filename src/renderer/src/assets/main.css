@@ -452,3 +452,5 @@ body.dark-mode .cm-panel.cm-search {
   transition: opacity 0.3s ease-in-out; /* ふわっと切り替わるアニメーション */
   filter:blur(0.3em);
 }
+
+#main-content:focus,#container:focus, .cm-editor:focus , .cm-content:focus, .cm-scroller:focus{outline: none;}

@@ -343,6 +343,7 @@ onTriggerSaveFile: (callback) => {
   isChatDirty: () => ipcRenderer.invoke('is-chat-dirty'),
   onRequestChatDirtyState: (callback) => ipcRenderer.on('request-chat-dirty-state', callback),
   responseChatDirtyState: (isDirty) => ipcRenderer.send('response-chat-dirty-state', isDirty),  
+  confirmDialog: (message) => ipcRenderer.invoke('confirm-dialog', message),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

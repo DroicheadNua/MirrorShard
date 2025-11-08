@@ -13,6 +13,7 @@ const aiFullscreenBtn = document.getElementById('ai-fullscreen-btn');
 const saveLogBtn = document.getElementById('ai-save-log-btn');
 const saveLogOWBtn = document.getElementById('ai-save-overwrite-btn');
 const loadLogBtn = document.getElementById('ai-load-log-btn');
+const clearLogBtn = document.getElementById('ai-clear-log-btn');
 const chatContainer = document.getElementById('chat-container')!;
 const TRANSPARENT_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 // ... (他のボタン要素への参照)
@@ -75,6 +76,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           (window as any).chatIsDirtyState = chatIsDirty;
       }
   });
+
+  // ログ消去ボタン
+  clearLogBtn?.addEventListener('click', () => {
+      handleClear();
+  });  
 
   // a) テーマ変更に追従
   window.electronAPI.onThemeUpdated((isDarkMode) => {
@@ -149,21 +155,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 入力エリアの自動伸縮機能 
   if (messageInput) {
-    // 1. CSSから、計算の基礎となる値を取得
-    const style = window.getComputedStyle(messageInput);
-    const initialRows = 3; // あなたの仕様
-    const lineHeight = parseFloat(style.lineHeight);
-    const paddingTop = parseFloat(style.paddingTop);
-    const paddingBottom = parseFloat(style.paddingBottom);
-    
-    // 2. 初期高さを、これらの値から「計算」で導き出す
-    const initialHeight = lineHeight * initialRows + paddingTop + paddingBottom;
-    messageInput.style.height = `${initialHeight}px`;
-
-    const maxHeight = lineHeight * 12 + paddingTop + paddingBottom; // 最大12行分
-
+    const maxHeight = 240; 
     messageInput.addEventListener('input', () => {
-      messageInput.style.height = 'auto'; // 一旦リセット
+      // a) 一旦高さをリセットして、現在の内容でのscrollHeightを計算させる
+      messageInput.style.height = 'auto';
+      // b) 計算された高さが、最大高さを超えていなければ、その高さを適用
       const newHeight = Math.min(messageInput.scrollHeight, maxHeight);
       messageInput.style.height = `${newHeight}px`;
     });
@@ -171,13 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- mainプロセスからの指令を待ち受けるリスナー ---
     window.electronAPI.on('trigger-ai-chat-clear', () => {
-      if (confirm('現在のチャットログをすべて消去しますか？')) {
-        chatHistory = [];
-        renderFullChatLog();
-        window.electronAPI.setStoreValue('lastAiChatSessionPath', null);
-        chatIsDirty = false;
-        (window as any).chatIsDirtyState = chatIsDirty;
-      }
+      handleClear();
     });
 
     window.electronAPI.on('trigger-ai-chat-load', async () => {
@@ -191,6 +181,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.electronAPI.on('trigger-ai-chat-save', () => {
       window.electronAPI.saveAiChatLog(chatHistory, 'pastel');
+      chatIsDirty = false;
+      (window as any).chatIsDirtyState = chatIsDirty;      
+    });
+
+    window.electronAPI.on('trigger-ai-chat-overwrite-save', () => {
+      window.electronAPI.saveAiChatLogOverwrite(chatHistory);
+      chatIsDirty = false;
+      (window as any).chatIsDirtyState = chatIsDirty;      
     });
 
     window.electronAPI.on('trigger-ai-chat-to-editor', () => {
@@ -323,7 +321,16 @@ messageRow.append(avatarContainer, messageContent);
   return messageRow;
 }
 
-
+async function handleClear() {
+    const confirmed = await window.electronAPI.confirmDialog('現在のチャットログをすべて消去しますか？');
+    if (confirmed) {
+        chatHistory = [];
+        renderFullChatLog();
+        window.electronAPI.setStoreValue('lastAiChatSessionPath', null);
+        chatIsDirty = true;
+        (window as any).chatIsDirtyState = chatIsDirty;
+    }
+}
 
 // ★ 編集 (handleEdit)
 function handleEdit(id: number) {
@@ -399,9 +406,9 @@ function handleEdit(id: number) {
 }
 
 // ★ このメッセージ以降を削除 (handleDelete)
-function handleDelete(id: number) {
+async function handleDelete(id: number) {
   // ユーザーに確認を求める (mainプロセス経由)
-  const confirmed = confirm(`メッセージ #${id + 1} 以降の履歴をすべて削除しますか？`);
+  const confirmed = await window.electronAPI.confirmDialog('このメッセージ以降の履歴をすべて削除しますか？');
   if (confirmed) {
     chatHistory = chatHistory.slice(0, id); // ユーザーのメッセージは残す
     chatIsDirty = true;
@@ -456,6 +463,27 @@ function updateUiLockState() {
     document.querySelectorAll('.action-btn').forEach(btn => {
         (btn as HTMLButtonElement).disabled = isLocked;
     });
+}
+
+function showNotification(message) {
+    const container = document.getElementById('notification-container');
+    const notification = document.createElement('div');
+    notification.className = 'toast-notification';
+    notification.textContent = message;
+    if(!container)return;
+    container.appendChild(notification);
+    
+    // 表示アニメーション
+    setTimeout(() => {
+        notification.classList.add('show');
+    }, 10);
+    
+    // 3秒後に消える
+    setTimeout(() => {
+        notification.classList.remove('show');
+        // アニメーションが終わったらDOMから削除
+        notification.addEventListener('transitionend', () => notification.remove());
+    }, 3000);
 }
 
 // --- イベントハンドラ ---

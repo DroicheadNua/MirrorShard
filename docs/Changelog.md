@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (新機能)  
 - AIチャットウィンドウを実装(Ctrl+Shift+Aで起動)。詳細は「AI機能使用ガイド.md」を参照
+- 素材としてアイコンを添付（resources/default_isonsフォルダ内）  
 - 「高度な設定 」(F2)を拡充、  AIチャットに対応（アイコン設定、表示名のカスタマイズなど）
 - メインエディタの右クリックメニューからGemini（Google AI studio）のログをインポートできるように  
 
 ### Changed (変更点)  
+- ストーリー・アーキタイプのテキストを一部変更  
 
 ### Fixed (修正点)  
 - Chain of Thoughtのボタンホバー時の説明が間違っていた（ショートカットキーがCtrl+Shift+TではなくCtrl+Shift+Aと誤記されていた）のを修正  
