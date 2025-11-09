@@ -550,15 +550,31 @@ async function requestAiResponse() {
 
     // それ以前の履歴を取得
     const historyContext = chatHistory.slice(0, -1);
+
+    // プロンプト側で文字数にソフトリミットを設ける処理（mainのハンドラ側ではmax_tokensでハードリミットを設ける）
+    const MaxLength = await window.electronAPI.getStoreValue('aiResponseMaxLength', 2000);
+    // Gemini向けの処理（Geminiは字数内で要約しようとしてくれるので正常に機能する）
+    const prompt = `（※${MaxLength}文字以内で回答してください）`
+    const lastUserLimit = lastUserMessage.content + prompt;
+
+    // 小規模ローカルLLMは指示追従能力が低く、デメリットのほうが大きいので断念
+
+    // const chatLimit = chatHistory.map(chatItem => {
+    //     return {
+    //         ...chatItem,
+    //         content: `${chatItem.content}（※${MaxLength}文字以内で回答してください）`
+    //     };
+    // });    
     
+
     // --- API呼び出しの分岐 ---
     if (selectedApi === 'gemini') {
       const apiKey = await window.electronAPI.getStoreValue('geminiApiKey', '');
       if (!apiKey) throw new Error('Gemini API Key not set.');
-      result = await window.electronAPI.requestGeminiResponse(apiKey, historyContext, lastUserMessage.content);
+      result = await window.electronAPI.requestGeminiResponse(apiKey, historyContext, lastUserLimit, 'chat');
     
     } else if (selectedApi === 'lm-studio') {
-      result = await window.electronAPI.requestLmStudioResponse(chatHistory); // LM Studioは全履歴を送る    
+      result = await window.electronAPI.requestLmStudioResponse(chatHistory, 'chat'); // LM Studioは全履歴を送る    
     } 
 
     // --- 応答の処理 ---

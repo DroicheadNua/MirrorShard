@@ -670,8 +670,6 @@ outlinePane.addEventListener('click', (e) => {
     }    
 });
 
-// (renderIpOutline 関数の「内部」または、そのすぐ上に、この新しい関数を追加)
-
 /**
  * 指定されたノードと、そのサブ階層（###, ####）を、
  * アウトラインのリスト要素として生成し、コンテナに追加する
@@ -2774,14 +2772,14 @@ async function triggerChainOfThought() {
         if (selectedApi === 'gemini') {
             // ★ Geminiに送る履歴は、CoTでは常に空でOK
             const historyForGemini: ChatMessage[] = [];
-            result = await window.electronAPI.requestGeminiResponse(apiKey, historyForGemini, prompt);
+            result = await window.electronAPI.requestGeminiResponse(apiKey, historyForGemini, prompt, 'cot');
         
         } else { // 'lm-studio' の場合
             // ★ historyForLmStudioに、正しい「パスポート」を与える
             const historyForLmStudio: ChatMessage[] = [
                 { role: 'user', content: prompt }
             ];
-            result = await window.electronAPI.requestLmStudioResponse(historyForLmStudio);
+            result = await window.electronAPI.requestLmStudioResponse(historyForLmStudio, 'cot');
         }
         if (result.success && result.text) {
             // 5. 結果を解析し、アニメーション付きで新しいノードを生成

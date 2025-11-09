@@ -14,6 +14,7 @@ interface SystemFontInfo {
 }
 // ★★★ fontsInfoは、このどちらかの型になる ★★★
 type FontsInfo = CycleFontsInfo | SystemFontInfo;
+type AiRequestContext = 'cot' | 'chat';
 
 interface ContentInfo {
   content: string;
@@ -248,10 +249,12 @@ saveIdeaProcessorFile: (filePath: string | null, saveData: any) => Promise<any>;
   requestGeminiResponse: (
       apiKey: string, 
       history: { role: string, content: string }[], 
-      newMessage: string
+      newMessage: string,
+      context: AiRequestContext
   ) => Promise<{ success: boolean; text?: string; error?: string; }>;  
   requestLmStudioResponse: (
-      history: ChatMessage[]
+      history: ChatMessage[],
+      context: AiRequestContext
   ) => Promise<{ success: boolean; text?: string; error?: string; }>;  
   showInfoDialog: (message: string) => void;
   openAiChatWindow: () => void;

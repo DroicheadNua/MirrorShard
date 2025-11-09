@@ -21,6 +21,7 @@ const geminiRadio = document.querySelector('input[name="api-provider"][value="ge
 const lmStudioRadio = document.querySelector('input[name="api-provider"][value="lm-studio"]') as HTMLInputElement;
 const geminiSettingsContainer = document.getElementById('gemini-settings-container');
 const cotCharLimitInput = document.getElementById('cot-char-limit-input') as HTMLInputElement;
+const aiMaxLengthInput = document.getElementById('ai-max-length-input') as HTMLInputElement;
 
 /** フォントリストを読み込み、UIを構築する */
 const loadFontList = async (force: boolean) => {
@@ -239,12 +240,20 @@ window.electronAPI.getStoreValue('selectedApi', 'gemini').then(api => {
 window.electronAPI.getStoreValue('cotCharLimit', 30).then(limit => {
   if (cotCharLimitInput) cotCharLimitInput.valueAsNumber = limit;
 });
+window.electronAPI.getStoreValue('aiResponseMaxLength', 2000).then(limit => {
+  if (aiMaxLengthInput) aiMaxLengthInput.valueAsNumber = limit;
+});
 
 // --- 2. 値が変更されたら、即座に保存する ---
 cotCharLimitInput?.addEventListener('change', () => {
   const limit = Math.max(10, Math.min(100, parseInt(cotCharLimitInput.value, 10)));
   cotCharLimitInput.value = String(limit); // 補正した値をUIに反映
   window.electronAPI.setStoreValue('cotCharLimit', limit);
+});
+aiMaxLengthInput?.addEventListener('change', () => {
+  const limit = Math.max(100, Math.min(40000, parseInt(aiMaxLengthInput.value, 10)));
+  aiMaxLengthInput.value = String(limit); // 補正した値をUIに反映
+  window.electronAPI.setStoreValue('aiResponseMaxLength', limit);
 });
 
 // --- User Name ---

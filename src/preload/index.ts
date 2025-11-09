@@ -321,10 +321,10 @@ onTriggerSaveFile: (callback) => {
   confirmSaveDialog: (windowName) => ipcRenderer.invoke('confirm-save-dialog', windowName),
   toggleIpAlwaysOnTop: () => ipcRenderer.invoke('toggle-ip-always-on-top'),
   togglePreviewAlwaysOnTop: () => ipcRenderer.invoke('toggle-preview-always-on-top'),
-  requestGeminiResponse: (apiKey, history, newMessage) => 
-      ipcRenderer.invoke('request-gemini-response', apiKey, history, newMessage), 
-  requestLmStudioResponse: (history) => 
-      ipcRenderer.invoke('request-lm-studio-response', history),   
+  requestGeminiResponse: (apiKey, history, newMessage, context) => 
+      ipcRenderer.invoke('request-gemini-response', apiKey, history, newMessage, context), 
+  requestLmStudioResponse: (history, context) => 
+      ipcRenderer.invoke('request-lm-studio-response', history, context),   
   showInfoDialog: (message) => ipcRenderer.send('show-info-dialog', message),
   openAiChatWindow: () => ipcRenderer.send('open-ai-chat-window'),
   closeAiChatWindow: () => ipcRenderer.send('close-ai-chat-window'),

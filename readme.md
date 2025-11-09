@@ -1,6 +1,6 @@
-MirrorShard ver. 1.4.0  
+MirrorShard ver. 1.5.0  
 
-アイデアプロセッサとAI連携機能を搭載した、小説執筆用エディタです。  
+AIチャット機能とアイデアプロセッサを搭載した、創作支援用テキストエディタです。  
 没入感を重視したミニマルなデザインに仕上げました。  
 
 ![MirrorShard Key Visual](screenshots/ScreenShot01.png)
@@ -8,11 +8,11 @@ MirrorShard ver. 1.4.0
 ■ ダウンロード  
 
 [![Windows](https://img.shields.io/badge/Download-Windows-blue)]  
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard.Setup.1.4.0.exe)  
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.5.0/MirrorShard.Setup.1.5.0.exe)  
 [![Mac (Apple Silicon)](https://img.shields.io/badge/Download-Mac_(Apple_Silicon)-green)]  
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard-1.4.0-arm64.dmg)  
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.5.0/MirrorShard-1.5.0-arm64.dmg)  
 [![Linux](https://img.shields.io/badge/Download-Linux-lightgrey)]  
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.4.0/MirrorShard-1.4.0-x86_64.AppImage)  
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.5.0/MirrorShard-1.5.0-x86_64.AppImage)  
 
 または、[最新のリリース一覧ページ](https://github.com/DroicheadNua/MirrorShard/releases/latest)からダウンロードできます。  
 
@@ -24,9 +24,11 @@ mirrorshard.dev@gmail.com
 
 ■主な特徴  
 ・縦書きと青空文庫形式のルビに対応し、リアルタイムで更新されるプレビューウィンドウ  
-・アイデアプロセッサを搭載。発想支援と執筆をシームレスに連携  
+・AIチャットウィンドウを搭載。アイコンも表示可能  
+![MirrorShard AI Chat 01](screenshots/ScreenShot06.png)
+![MirrorShard AI Chat 02](screenshots/ScreenShot07.png)
+・アイデアプロセッサを搭載。発想支援、マインドマップ作成、情報整理など多彩な使い方が可能。AI連携による発想支援機能も搭載  
 ![MirrorShard Idea Processor](screenshots/ScreenShot05.png)
-・AI連携による発想支援  
 ・数十万行に及ぶ巨大サイズのテキストにも対応  
 ・マークダウン記法によるアウトライン機能を搭載。またタブとアウトラインパネルが一体化した構造により、複数のテキストファイルをシームレスに運用可能  
 ・フレームレスウィンドウを採用したミニマルなデザインに加え、UIを非表示にできるZENモードを搭載  
@@ -49,6 +51,7 @@ ZENモード（UI非表示）状態でもショートカットは有効ですの
 
 ◯表示  
 縦書きプレビュー	Ctrl + P（Cmd + P）　プレビューウィンドウを開閉します。  
+AIチャット　Ctrl + Shift + A（Cmd + Shift + A）　AIチャットウィンドウを開きます（詳細は後述）。  
 アイデアプロセッサ　Ctrl + I（Cmd + I）　アイデアプロセッサウィンドウを開きます（詳細は後述）。  
 ダークモード切替	Ctrl + T（Cmd + T）　通常モードとダークモードを切り替えます。  
 スポットライトモード切替	Ctrl + L（Cmd + L）　編集中の項目以外をぼかして表示します。  
@@ -173,6 +176,22 @@ by word (チェックボックス): チェックを入れると、単語単位�
 ◯BGMの読み込み  
 ・BGMも同様に読み込むことができます（mp3・ogg・wav・m4aに対応）。操作は画像の読み込みと同じです。  
 
+◯AIの設定  
+　「AI Keys」「AI Chat Appearance」の項目では、AIに関する設定を行います。  
+
+API Provider: 使用するAIを選択します。クラウド上のGoogle Gemini 2.5 proを使用するか、ローカル環境でAIを運用するかを選ぶことができます。  
+ただしGeminiの使用にはGooleアカウントとAPIキーの取得が、ローカルAIの使用にはLM Studioのインストールと任意のAIモデルのダウンロードが必要になります。詳細は「AI機能使用ガイド」を御覧ください。  
+
+CoT Character Limit: アイデアプロセッサのChain of Thought（CoT）機能の応答の長さを設定します。詳細は「アイデアプロセッサ機能使用ガイド」を御覧ください。  
+
+AI Response Max Length: AIチャット機能での、AIの応答の長さを指定します。  
+
+User/Assistant Name: AIチャット機能での、ユーザーやAIの名前を変更します。空欄にすることもできます。  
+
+User/Assistant Icon Path: AIチャット機能での、ユーザーやAIのアイコンを指定します。空欄にすることもできます。  
+アイコンには任意の画像を使用できますが、素材フォルダの下のdefault_iconsフォルダにアイコンのサンプルがあります。  
+
+
 ◯ウィンドウを閉じる  
 　ウィンドウ右上の×ボタン、F2キー、ESCキーのどれかを押すと、設定画面が閉じます。  
 
@@ -203,6 +222,9 @@ by word (チェックボックス): チェックを入れると、単語単位�
 
 　なお、AI機能による発想支援（Chain of Thought）を使用するには、Google GeminiのAPIキー、またはLM StudioとローカルAIのセットアップが必要になります。詳細は「アイデアプロセッサ機能使用ガイド」をご確認ください。  
 
+■AIチャット  
+　Ctrl+Shift+AでAIチャットウィンドウを開くことができます。詳細は「AIチャット機能使用ガイド」を御覧ください。  
+
 ■エクスポート  
 　電子書籍（EPUB形式）やPDF、HTMLへのエクスポートを行います。  
 　必要項目を設定し、画面最下段のExportボタンを押すと、指定したフォルダにファイルを作成します。  
@@ -223,7 +245,7 @@ by word (チェックボックス): チェックを入れると、単語単位�
 　・Noto Serif Japanese（Google Fonts, SIL Open Font License, Version 1.1）  
 　・Klee One（Fontworks Inc.様　SIL OPEN FONT LICENSE Version 1.1 ）  
 
-・背景画像  
+・背景画像およびサンプルアイコン  
 　Imagen 4 による生成  
 
 ・BGM  

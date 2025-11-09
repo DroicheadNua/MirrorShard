@@ -3028,7 +3028,7 @@ ipcMain.on('request-toggle-fullscreen', (event) => {
   }
 });
 
-ipcMain.handle('request-gemini-response', async (_event, apiKey: string, history: any[], newMessage: string) => {
+ipcMain.handle('request-gemini-response', async (_event, apiKey: string, history: any[], newMessage: string, context: string) => {
     try {
       const { GoogleGenerativeAI } = require("@google/generative-ai"); 
         const genAI = new GoogleGenerativeAI(apiKey);
@@ -3046,7 +3046,9 @@ ipcMain.handle('request-gemini-response', async (_event, apiKey: string, history
         const result = await chat.sendMessage(newMessage);
         const response = result.response;
         const text = response.text();
-        const maxLength = store.get('aiResponseMaxLength', 2000);
+        const maxLength = context === 'cot' 
+            ? store.get('cotCharLimit', 30) * 4.5
+            : store.get('aiResponseMaxLength', 2000) * 1.5;
         const truncatedText = text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
         return { success: true, text: truncatedText };
         
@@ -3060,13 +3062,15 @@ ipcMain.handle('request-gemini-response', async (_event, apiKey: string, history
     }
 });
 
-ipcMain.handle('request-lm-studio-response', async (_event, history: ChatMessage[]) => {
+ipcMain.handle('request-lm-studio-response', async (_event, history: ChatMessage[], context: string) => {
   try {
     const fetch = require('node-fetch');
     // 1. ストアから、「1アイデアあたりの目標文字数」を読み込む
-    const charLimitPerIdea = store.get('cotCharLimit', 30);    
+    const charLimit = context === 'cot'
+        ? store.get('cotCharLimit', 30)
+        : store.get('aiResponseMaxLength', 2000);   
     // 2. 3つのアイデアの「合計の目標文字数」を計算する
-    const totalCharLimit = charLimitPerIdea * 3;    
+    const totalCharLimit = context === 'cot' ? charLimit * 3 : charLimit;  
     // 3. 合計文字数を、AIが理解できる「合計トークン数」に換算する
     const maxTokens = Math.ceil(totalCharLimit * 1.5);
     const response = await fetch('http://127.0.0.1:1234/v1/chat/completions', {
@@ -3193,7 +3197,7 @@ ipcMain.handle('load-ai-chat-log', async () => {
     });
     if (canceled || !filePaths.length) return null;
     const filePath = filePaths[0];
-console.log("normal");
+    console.log("load ai");
     try {
       const content = await fsPromises.readFile(filePath, 'utf-8');
       const data = JSON.parse(content);
@@ -3232,9 +3236,10 @@ console.log("normal");
 ipcMain.handle('load-ai-chat-log-by-path', async (_event, filePath: string) => {
     try {
         if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+          store.set('lastAiChatSessionPath', null);
             throw new Error(`Path is not a valid file: ${filePath}`);
         }
-        console.log("bypath");
+        console.log("load ai bypath");
         const content = await fsPromises.readFile(filePath, 'utf-8');
       const data = JSON.parse(content);
 
