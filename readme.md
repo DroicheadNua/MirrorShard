@@ -25,7 +25,6 @@ mirrorshard.dev@gmail.com
 ■主な特徴  
 ・縦書きと青空文庫形式のルビに対応し、リアルタイムで更新されるプレビューウィンドウ  
 ・AIチャットウィンドウを搭載。アイコンも表示可能  
-![MirrorShard AI Chat 01](screenshots/ScreenShot06.png)
 ![MirrorShard AI Chat 02](screenshots/ScreenShot07.png)
 ・アイデアプロセッサを搭載。発想支援、マインドマップ作成、情報整理など多彩な使い方が可能。AI連携による発想支援機能も搭載  
 ![MirrorShard Idea Processor](screenshots/ScreenShot05.png)
