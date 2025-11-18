@@ -461,14 +461,14 @@ function buildMenu(): void {
         if (focusedWindow === ideaProcessorWindow) {
           focusedWindow.webContents.send('trigger-ip-undo');
         } else {
-          // ★ `focusedWindow`は、本物の`BrowserWindow`なので、`webContents`が存在する
-          focusedWindow.webContents.undo(); 
+          focusedWindow?.webContents.send('trigger-undo');
+          console.log("shortcutUndo");
         }
       }
     },
     {
       label: 'Redo',
-      accelerator: 'CmdOrCtrl+Y',
+      accelerator: process.platform === 'darwin' ? 'Cmd+Shift+Z' : 'CmdOrCtrl+Y',
       click: () => {
         const focusedWindow = BrowserWindow.getFocusedWindow();
         if (!focusedWindow) return;
@@ -476,7 +476,8 @@ function buildMenu(): void {
         if (focusedWindow === ideaProcessorWindow) {
           focusedWindow.webContents.send('trigger-ip-redo');
         } else {
-          focusedWindow.webContents.redo();
+          focusedWindow?.webContents.send('trigger-redo');
+          console.log("shortcutRedo");
         }
       }
     },
@@ -2689,6 +2690,8 @@ ipcMain.on('apply-system-font', (_event, font: { path: string; family: string })
             return { ...item, click: () => senderWindow.webContents.send('trigger-save-as-file') };           
           case 'undo':
             return { ...item, role: 'undo' };
+          case 'redo':
+            return { ...item, role: 'redo' };            
           case 'cut':
             return { ...item, role: 'cut' };
           case 'copy':
@@ -3487,6 +3490,17 @@ async function _createNewUntitledFile(webContents: Electron.WebContents) {
   webContents.send('file:new', untitledPath);
 };
 
+if (process.argv.slice(1).includes('--version')) {
+  // package.jsonのバージョンを取得して表示
+  console.log(app.getVersion());
+  // アプリケーションを終了
+  app.quit();
+}
+// サンドボックス無効化のコードもこの辺り
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('no-sandbox');
+}
+
 app.whenReady().then(() => {
   // 1. アプリケーションの基本的なセットアップ
   electronApp.setAppUserModelId('com.YourName.mirrorshard'); // ★ AppUserModelIdを更新
@@ -3703,6 +3717,7 @@ ipcMain.handle('history:push', async (_event, stateString: string) => {
     const webContents = event.sender;
     if (webContents && !webContents.isDestroyed()) {
       webContents.undo();
+      console.log("webUndo");
     }
   });
 
@@ -3710,6 +3725,7 @@ ipcMain.handle('history:push', async (_event, stateString: string) => {
     const webContents = event.sender;
     if (webContents && !webContents.isDestroyed()) {
       webContents.redo();
+      console.log("webRedo");
     }
   });
 

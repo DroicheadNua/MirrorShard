@@ -275,6 +275,8 @@ saveIdeaProcessorFile: (filePath: string | null, saveData: any) => Promise<any>;
   onRequestChatDirtyState: (callback: () => void) => void;
   responseChatDirtyState: (isDirty: boolean) => void;  
   confirmDialog: (message: string) => Promise<boolean>;
+  onTriggerUndo: (callback: () => void) => void;
+  onTriggerRedo: (callback: () => void) => void;
 }
 
 // グローバルなwindowオブジェクトにelectronAPIが存在することを宣言

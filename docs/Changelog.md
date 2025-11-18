@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2025-11-XX  
+
+### Added (新機能)  
+
+### Changed (変更点)  
+- アンドゥ・リドゥなどのUIボタンを追加  
+- [Linux] コマンドラインから `--version` オプションでバージョン情報を確認できるように  
+
+### Fixed (修正点)  
+- [Linux] 一部の環境で起動に失敗する問題を解決するため、 --no-sandbox オプションを自動で追加するように修正  
+
 ## [1.5.0] - 2025-11-10  
 
 ### Added (新機能)  

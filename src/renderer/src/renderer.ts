@@ -4,7 +4,7 @@
 import '../assets/main.css';
 import { EditorState, Compartment, Transaction, RangeSetBuilder } from '@codemirror/state';
 import { EditorView, keymap, Decoration, ViewPlugin, ViewUpdate, DecorationSet } from '@codemirror/view';
-import { history, historyKeymap, cursorDocStart, cursorDocEnd, insertTab } from '@codemirror/commands';
+import { history, historyKeymap, cursorDocStart, cursorDocEnd, insertTab,undo, redo } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
@@ -772,6 +772,7 @@ const showEditorContextMenu = (targetView: EditorView) => {
         { id: 'save-as-file', label: '名前を付けて保存...' },
         { type: 'separator' },
         { id: 'undo', label: '元に戻す' },
+        { id: 'redo', label: 'やり直す' },
         // ...
         { id: 'cut', label: '切り取り', enabled: hasSelection },
         { id: 'copy', label: 'コピー', enabled: hasSelection },
@@ -1440,6 +1441,11 @@ async function initializeApp() {
     const settingsBtn = document.getElementById('settings-btn');
     const exportBtn = document.getElementById('export-btn');
     const AIChatBtn = document.getElementById('open-ai-chat-btn');
+    const saveFileBtn = document.getElementById('save-file-btn');
+    const saveAsBtn = document.getElementById('save-as-btn');
+    const undoBtn = document.getElementById('undo-btn');
+    const redoBtn = document.getElementById('redo-btn');
+    
 
     if (!outlineContainer || !collapseAllBtn /* ... */) {
         console.error("Initialization failed: UI elements are missing.");
@@ -1448,6 +1454,14 @@ async function initializeApp() {
 
     // UIボタンのイベントリスナー
     newFileBtn?.addEventListener('click', addNewFile);
+    saveFileBtn?.addEventListener('click', () => saveFileAction(false));
+    saveAsBtn?.addEventListener('click', () => saveFileAction(true));
+    undoBtn?.addEventListener('click', () => {
+      undo({ state: view.state, dispatch: view.dispatch });
+    });
+    redoBtn?.addEventListener('click', () => {
+      redo({ state: view.state, dispatch: view.dispatch });
+    });  
     openFileBtn?.addEventListener('click', openFileAction);
     collapseAllBtn.addEventListener('click', () => setAllHeadingsCollapsed(state.activeFileId, true));
     expandAllBtn?.addEventListener('click', () => setAllHeadingsCollapsed(state.activeFileId, false));
@@ -1491,6 +1505,7 @@ exportBtn?.addEventListener('click', () => {
 AIChatBtn?.addEventListener('click', () => {
     window.electronAPI.openAiChatWindow();
 });
+
 
     mainContent?.addEventListener('contextmenu', (event) => {
       // 1. イベントの発生源が、エディタかその子孫であるかをチェック
@@ -1624,6 +1639,12 @@ AIChatBtn?.addEventListener('click', () => {
     window.electronAPI.onThemeUpdated((isDarkMode) => {
     applyTheme(isDarkMode);
   });
+    window.electronAPI.onTriggerRedo(() => {
+  redo({ state: view.state, dispatch: view.dispatch });
+});    
+    window.electronAPI.onTriggerUndo(() => {
+  undo({ state: view.state, dispatch: view.dispatch });
+});  
 
   // --- グローバルなキーボードショートカットリスナー ---
   window.addEventListener('keydown', (e) => {

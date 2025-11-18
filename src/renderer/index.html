@@ -16,13 +16,13 @@
     <!-- 上部のタイトルバー（ドラッグ領域） -->
     <div id="title-bar">  
       <button id="zen-mode-btn" title="ZENモード (Cmd/Ctrl+Shift+C)">Z</button> 
-        <div class="font-controls zen-hide">
+        <div class="file-controls zen-hide">
           <button id="new-file-btn" title="新規ファイル(Ctrl+N)">📄</button>
           <button id="open-file-btn" title="ファイルを開く (Ctrl+O)">📂</button>
-          <button id="decrease-font-btn" title="文字を小さく(Ctrl+-)">-</button>
-          <button id="reset-font-btn" title="リセット(Ctrl+0)">○</button>
-          <button id="increase-font-btn" title="文字を大きく(Ctrl++)">+</button>
-          <button id="cycle-font-btn" title="フォント切替(Ctrl+Shift+F)">F</button>
+          <button id="save-file-btn" title="保存 (Ctrl+S)">💾</button>
+          <button id="save-as-btn" title="名前をつけて保存">💾+</button>
+          <button id="undo-btn" title="もとに戻す (Ctrl+Z)">↩️</button>
+          <button id="redo-btn" title="やり直す (Ctrl+Y)">↪️</button>
           <button id="bgm-cycle-btn" title="次の曲へ (Cmd/Ctrl+Shift+M)">🎵</button>
           <button id="bgm-play-pause-btn" title="再生/停止 (Cmd/Ctrl+Shift+P)">▶</button>
           <button id="typesound-toggle-btn" title="タイプ音 ON/OFF (Cmd/Ctrl+Shift+T)">🎤</button>
@@ -45,7 +45,6 @@
 
     <!-- メインコンテンツ領域（タイトルバーの下） -->
     <div id="main-content">
-
       <div id="status-bar" class="zen-hide">
         <span id="status-breadcrumbs"></span>        
         <div class="status-right">        
@@ -58,8 +57,13 @@
       
       <!-- 左側のアウトラインパネル -->
       <div id="outline-panel">
-        <div class="outline-controls">
-            
+        <div class="font-controls zen-hide">
+          <button id="decrease-font-btn" title="文字を小さく(Ctrl+-)">-</button>
+          <button id="reset-font-btn" title="リセット(Ctrl+0)">○</button>
+          <button id="increase-font-btn" title="文字を大きく(Ctrl++)">+</button>
+          <button id="cycle-font-btn" title="フォント切替(Ctrl+Shift+F)">F</button>
+        </div>   
+        <div class="outline-controls">            
           <button id="collapse-all-btn" title="すべて折りたたむ">↑</button>
           <button id="expand-all-btn" title="すべて展開">↓</button>
         </div>

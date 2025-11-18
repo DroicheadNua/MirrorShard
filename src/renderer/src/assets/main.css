@@ -83,12 +83,12 @@ body.initialized {
   padding: 0 10px;
   background-color: transparent;
 }
-.font-controls, .window-controls {
+.font-controls, .file-controls, .window-controls {
   -webkit-app-region: no-drag; 
   display: flex;
   align-items: center;
 }
-.font-controls button, .window-controls button ,#collapse-all-btn, #expand-all-btn, #bgm-cycle-btn, #bgm-play-pause-btn, #zen-mode-btn{
+.font-controls button, .file-controls button, .window-controls button ,#collapse-all-btn, #expand-all-btn, #bgm-cycle-btn, #bgm-play-pause-btn, #zen-mode-btn{
   width: 24px;
   height: 24px;
   border: none;
@@ -107,7 +107,7 @@ body.initialized {
   margin-top: 10px;
   border: 1px solid var(--btn-border-color);
 }
-.font-controls button:hover, .window-controls button:hover, #collapse-all-btn:hover, #expand-all-btn:hover, #bgm-cycle-btn:hover, #bgm-play-pause-btn:hover, #zen-mode-btn:hover{ 
+.font-controls button:hover, .file-controls button:hover, .window-controls button:hover, #collapse-all-btn:hover, #expand-all-btn:hover, #bgm-cycle-btn:hover, #bgm-play-pause-btn:hover, #zen-mode-btn:hover{ 
   background-color: var(--outline-hover-bg);
 }
 
@@ -274,8 +274,11 @@ body.initialized {
 body.zen-mode .zen-hide {
   display: none;
 }
-.font-controls{
+.file-controls{
   margin-left: 30px;
+}
+.font-controls{
+  margin-left: 10px;
 }
 body.zen-mode #container {
   width: 65%;

@@ -344,6 +344,8 @@ onTriggerSaveFile: (callback) => {
   onRequestChatDirtyState: (callback) => ipcRenderer.on('request-chat-dirty-state', callback),
   responseChatDirtyState: (isDirty) => ipcRenderer.send('response-chat-dirty-state', isDirty),  
   confirmDialog: (message) => ipcRenderer.invoke('confirm-dialog', message),
+  onTriggerUndo: (callback) => ipcRenderer.on('trigger-undo', callback),
+  onTriggerRedo: (callback) => ipcRenderer.on('trigger-redo', callback),  
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)
