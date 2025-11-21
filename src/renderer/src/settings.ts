@@ -22,6 +22,8 @@ const lmStudioRadio = document.querySelector('input[name="api-provider"][value="
 const geminiSettingsContainer = document.getElementById('gemini-settings-container');
 const cotCharLimitInput = document.getElementById('cot-char-limit-input') as HTMLInputElement;
 const aiMaxLengthInput = document.getElementById('ai-max-length-input') as HTMLInputElement;
+const aiModelSelect = document.getElementById('ai-model-select') as HTMLSelectElement;
+const customInput = document.getElementById('ai-model-custom') as HTMLInputElement;
 
 /** フォントリストを読み込み、UIを構築する */
 const loadFontList = async (force: boolean) => {
@@ -254,6 +256,40 @@ aiMaxLengthInput?.addEventListener('change', () => {
   const limit = Math.max(100, Math.min(40000, parseInt(aiMaxLengthInput.value, 10)));
   aiMaxLengthInput.value = String(limit); // 補正した値をUIに反映
   window.electronAPI.setStoreValue('aiResponseMaxLength', limit);
+});
+
+// --- Gemini Model ---
+// 表示切替ロジック
+aiModelSelect.addEventListener('change', () => {
+  if (aiModelSelect.value === 'custom') {
+    customInput.style.display = 'block';
+  } else {
+    customInput.style.display = 'none';
+  }
+  saveSettings(); // 即時保存
+});
+
+customInput.addEventListener('change', saveSettings);
+
+// 保存ロジック
+function saveSettings() {
+  const modelToSave = aiModelSelect.value === 'custom' ? customInput.value : aiModelSelect.value;
+  window.electronAPI.setStoreValue('aiModel', modelToSave);
+}
+
+// 読み込みロジック
+window.electronAPI.getStoreValue('aiModel', 'gemini-2.5-pro').then(model => {
+  // 既知のリストにあるかチェック
+  const options = Array.from(aiModelSelect.options).map(o => o.value);
+  if (options.includes(model)) {
+    aiModelSelect.value = model;
+    customInput.style.display = 'none';
+  } else {
+    // リストになければカスタム扱い
+    aiModelSelect.value = 'custom';
+    customInput.value = model;
+    customInput.style.display = 'block';
+  }
 });
 
 // --- User Name ---

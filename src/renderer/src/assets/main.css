@@ -110,6 +110,9 @@ body.initialized {
 .font-controls button:hover, .file-controls button:hover, .window-controls button:hover, #collapse-all-btn:hover, #expand-all-btn:hover, #bgm-cycle-btn:hover, #bgm-play-pause-btn:hover, #zen-mode-btn:hover{ 
   background-color: var(--outline-hover-bg);
 }
+#save-as-btn{
+  font-size: 11px;
+}
 
 /* --- 3. メインコンテンツ (アウトライン + エディタ) --- */
 #main-content {

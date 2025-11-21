@@ -1,17 +1,19 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="UTF-8">
   <title>Advanced Settings</title>
   <link rel="stylesheet" href="./src/assets/settings.css">
 </head>
+
 <body>
   <div id="window-controls">
     <button id="close-settings-btn" title="Close (Esc)">×</button>
   </div>
-  
+
   <h2>Advanced Settings</h2>
-  
+
   <section id="font-settings">
     <h3>System Fonts</h3>
     <p>PCにインストールされているフォントをエディタに適用します。</p>
@@ -21,101 +23,115 @@
     <p id="current-font-display">Current Font: Loading...</p>
     <p id="font-scan-status"></p>
   </section>
-    
-    <hr>
-    
-    <!-- --- Custom Resources --- -->
-    <section id="custom-resources">
-      <h3>Custom Resources</h3>
-      <p class="description">お好きな背景画像やBGMを、サイクル機能とは別に指定します。</p>
-      
-      <div class="form-group">
-        <label for="bg-path-input">Custom Background Image:</label>
-        <div class="file-input-wrapper">
-          <input type="text" id="bg-path-input" readonly placeholder="No custom image selected">
-          <button id="select-bg-btn">Select...</button>
-          <button id="clear-bg-btn" class="clear-btn">×</button>
-        </div>
+
+  <hr>
+
+  <!-- --- Custom Resources --- -->
+  <section id="custom-resources">
+    <h3>Custom Resources</h3>
+    <p class="description">お好きな背景画像やBGMを、サイクル機能とは別に指定します。</p>
+
+    <div class="form-group">
+      <label for="bg-path-input">Custom Background Image:</label>
+      <div class="file-input-wrapper">
+        <input type="text" id="bg-path-input" readonly placeholder="No custom image selected">
+        <button id="select-bg-btn">Select...</button>
+        <button id="clear-bg-btn" class="clear-btn">×</button>
       </div>
-      
-      <div class="form-group">
-        <label for="bgm-path-input">Custom BGM:</label>
-        <div class="file-input-wrapper">
-          <input type="text" id="bgm-path-input" readonly placeholder="No custom BGM selected">
-          <button id="select-bgm-btn">Select...</button>
-          <button id="clear-bgm-btn" class="clear-btn">×</button>
-        </div>
+    </div>
+
+    <div class="form-group">
+      <label for="bgm-path-input">Custom BGM:</label>
+      <div class="file-input-wrapper">
+        <input type="text" id="bgm-path-input" readonly placeholder="No custom BGM selected">
+        <button id="select-bgm-btn">Select...</button>
+        <button id="clear-bgm-btn" class="clear-btn">×</button>
       </div>
-    </section>
-
-    <hr>
-
-<section id="external-tools-settings">
-  <h3>External Tools</h3>
-  
-  <div class="form-group">
-    <label for="pandoc-path-input">Pandoc Path:</label>
-    <div class="file-input-wrapper">
-      <input type="text" id="pandoc-path-input" placeholder="pandoc">
-      <button id="select-pandoc-btn">Select...</button>
     </div>
-    <p class="description">
-      EpubやPDFへのエクスポートに必要です。
-      <a href="#" id="pandoc-link">インストールはこちら</a>
-    </p>
-  </div>
-</section>
+  </section>
 
-    <hr>
+  <hr>
 
-<section id="ai-keys">
-  <h3>AI Keys</h3>
-  <div class="setting-item">
-    <span>API Provider:</span>
-    <label><input type="radio" name="api-provider" value="gemini" checked> Gemini</label>
-    <label><input type="radio" name="api-provider" value="lm-studio"> LM Studio</label>
-  </div>
-  <div class="setting-item">
-    <label for="cot-char-limit-input">CoT Character Limit:</label>
-    <input type="number" id="cot-char-limit-input" value="30" min="10" max="100">
-    <span>(10〜100文字,デフォルトは30)</span>
-  </div>
-  <div class="setting-item">
-    <label for="ai-max-length-input">AI Response Max Length:</label>
-    <input type="number" id="ai-max-length-input" value="2000" min="100" max="40000">
-    <span>(100〜40000文字)</span>
-  </div>  
-  <div class="setting-item" id="gemini-settings-container">
-    <label for="gemini-api-key-input">Gemini API Key:</label>
-    <input type="password" id="gemini-api-key-input" placeholder="Enter your API key">
-  </div>
-</section>
-<section id="ai-chat-settings">
-  <h3>AI Chat Appearance</h3>
-  <div class="setting-item">
-    <label for="ai-user-name-input">User Name:</label>
-    <input type="text" id="ai-user-name-input">
-  </div>
-  <div class="setting-item">
-    <label for="ai-user-icon-path-input">User Icon Path:</label>
-    <div class="file-input-container">
-      <input type="text" id="ai-user-icon-path-input">
-      <button id="ai-user-icon-select">Select...</button>
+  <section id="external-tools-settings">
+    <h3>External Tools</h3>
+
+    <div class="form-group">
+      <label for="pandoc-path-input">Pandoc Path:</label>
+      <div class="file-input-wrapper">
+        <input type="text" id="pandoc-path-input" placeholder="pandoc">
+        <button id="select-pandoc-btn">Select...</button>
+      </div>
+      <p class="description">
+        EpubやPDFへのエクスポートに必要です。
+        <a href="#" id="pandoc-link">インストールはこちら</a>
+      </p>
     </div>
-  </div>
-  <div class="setting-item">
-    <label for="ai-assistant-name-input">Assistant Name:</label>
-    <input type="text" id="ai-assistant-name-input">
-  </div>
-  <div class="setting-item">
-    <label for="ai-assistant-icon-path-input">Assistant Icon Path:</label>
-    <div class="file-input-container">
-      <input type="text" id="ai-assistant-icon-path-input">
-      <button id="ai-assistant-icon-select">Select...</button>
+  </section>
+
+  <hr>
+
+  <section id="ai-keys">
+    <h3>AI Keys</h3>
+    <div class="setting-item">
+      <span>API Provider:</span>
+      <label><input type="radio" name="api-provider" value="gemini" checked> Gemini</label>
+      <label><input type="radio" name="api-provider" value="lm-studio"> LM Studio</label>
     </div>
-  </div>
-</section>
-  
+    <div class="setting-item">
+      <label for="cot-char-limit-input">CoT Character Limit:</label>
+      <input type="number" id="cot-char-limit-input" value="30" min="10" max="100">
+      <span>(10〜100文字,デフォルトは30)</span>
+    </div>
+    <div class="setting-item">
+      <label for="ai-max-length-input">AI Response Max Length:</label>
+      <input type="number" id="ai-max-length-input" value="2000" min="100" max="40000">
+      <span>(100〜40000文字)</span>
+    </div>
+    <div class="setting-item" id="gemini-settings-container">
+      <label for="gemini-api-key-input">Gemini API Key:</label>
+      <input type="password" id="gemini-api-key-input" placeholder="Enter your API key">
+      <div>
+        <label for="ai-model-select">AI Model:</label>
+        <select id="ai-model-select">
+          <option value="gemini-2.5-pro">Gemini 2.5 Pro(高性能)</option>
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash(高速)</option>
+          <option value="custom">カスタムモデル指定...</option>
+        </select>
+        <input type="text" id="ai-model-custom" placeholder="例: gemini-3-pro-preview"
+          style="display: none; margin-top: 5px; width: 100%;">
+        <p class="setting-note" style="font-size: 0.8em; color: #888; margin-top: 4px;">
+          ※「カスタム」で無料枠のないモデル（Gemini 3.0 Proなど）を指定した場合、Google Cloudの課金設定によっては料金が発生する可能性があります。ご注意ください。
+        </p>
+      </div>
+    </div>
+  </section>
+  <section id="ai-chat-settings">
+    <h3>AI Chat Appearance</h3>
+    <div class="setting-item">
+      <label for="ai-user-name-input">User Name:</label>
+      <input type="text" id="ai-user-name-input">
+    </div>
+    <div class="setting-item">
+      <label for="ai-user-icon-path-input">User Icon Path:</label>
+      <div class="file-input-container">
+        <input type="text" id="ai-user-icon-path-input">
+        <button id="ai-user-icon-select">Select...</button>
+      </div>
+    </div>
+    <div class="setting-item">
+      <label for="ai-assistant-name-input">Assistant Name:</label>
+      <input type="text" id="ai-assistant-name-input">
+    </div>
+    <div class="setting-item">
+      <label for="ai-assistant-icon-path-input">Assistant Icon Path:</label>
+      <div class="file-input-container">
+        <input type="text" id="ai-assistant-icon-path-input">
+        <button id="ai-assistant-icon-select">Select...</button>
+      </div>
+    </div>
+  </section>
+
   <script type="module" src="./src/settings.ts"></script>
 </body>
+
 </html>

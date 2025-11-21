@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added (新機能)  
 
 ### Changed (変更点)  
+- Geminiのモデルを選択出来るようになった。AI設定から選択可能に  
 - アンドゥ・リドゥなどのUIボタンを追加  
 - [Linux] コマンドラインから `--version` オプションでバージョン情報を確認できるように  
 

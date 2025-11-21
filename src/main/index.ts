@@ -41,6 +41,7 @@ interface StoreType {
   aiResponseMaxLength?: number;
   aiChatWindowBounds?: { x: number; y: number; width: number; height: number; };
   lastAiChatSessionPath?: string | null;  
+  aiModel: string;
 }
 
 const store = new Store<StoreType>({ 
@@ -70,6 +71,7 @@ const store = new Store<StoreType>({
     aiResponseMaxLength: 2000,
     aiChatWindowBounds: undefined,
     lastAiChatSessionPath: null,    
+    aiModel: "gemini-2.5-pro"
   }
 });
 
@@ -3032,10 +3034,11 @@ ipcMain.on('request-toggle-fullscreen', (event) => {
 });
 
 ipcMain.handle('request-gemini-response', async (_event, apiKey: string, history: any[], newMessage: string, context: string) => {
+  const modelName = store.get('aiModel'); 
     try {
       const { GoogleGenerativeAI } = require("@google/generative-ai"); 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" }); 
+        const model = genAI.getGenerativeModel({ model: modelName }); 
 
         const chat = model.startChat({
             history: history.map(msg => ({
