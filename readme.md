@@ -1,4 +1,4 @@
-MirrorShard ver. 1.5.0  
+MirrorShard ver. 1.5.1  
 
 AIチャット機能とアイデアプロセッサを搭載した、創作支援用テキストエディタです。  
 没入感を重視したミニマルなデザインに仕上げました。  
@@ -8,11 +8,11 @@ AIチャット機能とアイデアプロセッサを搭載した、創作支援
 ■ ダウンロード  
 
 [![Windows](https://img.shields.io/badge/Download-Windows-blue)]  
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.5.0/MirrorShard.Setup.1.5.0.exe)  
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.5.1/MirrorShard.Setup.1.5.1.exe)  
 [![Mac (Apple Silicon)](https://img.shields.io/badge/Download-Mac_(Apple_Silicon)-green)]  
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.5.0/MirrorShard-1.5.0-arm64.dmg)  
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.5.1/MirrorShard-1.5.1-arm64.dmg)  
 [![Linux](https://img.shields.io/badge/Download-Linux-lightgrey)]  
-(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.5.0/MirrorShard-1.5.0-x86_64.AppImage)  
+(https://github.com/DroicheadNua/MirrorShard/releases/download/v1.5.1/MirrorShard-1.5.1-x86_64.AppImage)  
 
 または、[最新のリリース一覧ページ](https://github.com/DroicheadNua/MirrorShard/releases/latest)からダウンロードできます。  
 
