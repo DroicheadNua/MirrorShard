@@ -6,8 +6,10 @@
 さらにマークダウン／HTMLプレビュー機能とコードエディタモードが加わり、より汎用性の高いエディタとして生まれ変わりました。  
 ファイルサイズはElectron版の約1/30（Windows版で約6MB）と劇的に軽量化されています。  
 
-リポジトリはこちら  
-https://github.com/DroicheadNua/MirrorShard_2  
+MirrorShard 2 公式サイト  
+https://droicheadnua.github.io/MirrorShard-Official/
+リポジトリ  
+https://github.com/DroicheadNua/MirrorShard_2
 
 # MirrorShard ver. 1.5.1  
 
