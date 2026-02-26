@@ -8,6 +8,7 @@
 
 MirrorShard 2 公式サイト  
 https://droicheadnua.github.io/MirrorShard-Official/
+
 リポジトリ  
 https://github.com/DroicheadNua/MirrorShard_2
 
