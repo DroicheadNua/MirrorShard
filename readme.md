@@ -2,20 +2,24 @@
 現在、本ソフトウェアのフレームワークをTauriに変更した「MirrorShard 2」を開発中です。  
 
 正式版リリースしました。  
-アイデアプロセッサ機能は未搭載ですが、代わりに新たなAI機能を追加し、外観のカスタマイズを大幅に強化。  
+ほぼ全機能の移植を完了しました。更に新たなAI機能を追加、外観のカスタマイズを大幅に強化されています。  
 さらにマークダウン／HTMLプレビュー機能とコードエディタモードが加わり、より汎用性の高いエディタとして生まれ変わりました。  
-ファイルサイズはElectron版の約1/30（Windows版で約6MB）と劇的に軽量化されています。  
+ファイルサイズはElectron版の約1/30（Windows版で7MB弱）と劇的に軽量化されています。  
 
 MirrorShard 2 公式サイト  
 https://droicheadnua.github.io/MirrorShard-Official/
-
 リポジトリ  
 https://github.com/DroicheadNua/MirrorShard_2
 
 # MirrorShard ver. 1.5.1  
 
-AIチャット機能とアイデアプロセッサを搭載した、創作支援用テキストエディタです。  
+AIチャット機能とアイデアプロセッサを搭載したライティングエディタです。  
 没入感を重視したミニマルなデザインに仕上げました。  
+
+## 📰 メディア掲載 / Media Coverage  
+「窓の杜」様にご紹介いただきました  
+[シンプル・ミニマルで禅の境地 ～小説執筆に特化したWin/Mac向けエディター「MirrorShard」](https://forest.watch.impress.co.jp/docs/review/2057327.html)  
+[小説執筆のためのテキストエディター「MirrorShard」にAIチャット機能、v1.5.0が公開](https://forest.watch.impress.co.jp/docs/news/2063091.html)  
 
 ![MirrorShard Key Visual](screenshots/ScreenShot01.png)
 
